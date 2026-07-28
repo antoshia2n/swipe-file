@@ -1,139 +1,65 @@
-# shia2n-app-template
+# swipe-file（スワイプファイルアプリ）
 
-新しいアプリを始めるときの雛形。`shia2n-core` を使った最小構成の React+Vite+Cloudflare Pages アプリ。
+参考にしたい他者コンテンツを「URL・理由・タグ」の3点セットで貯め、AI が制作時に1発で参照できる状態を作るアプリ。
 
----
-
-## 新アプリ立ち上げ手順
-
-### ① このテンプレートから新規リポジトリ作成
-
-GitHub の `shia2n-app-template` ページで **「Use this template」→「Create a new repository」** をクリック。
-
-- Repository name: `my-new-app` など好きな名前
-- Public / Private はどちらでもOK
-
-### ② アプリ名を設定
-
-`src/constants.js` を開いて書き換える：
-
-```js
-export const APP_ID   = "my-new-app";    // ← ポータルのFirestoreで使われるID
-export const APP_NAME = "My New App";    // ← ログイン画面に表示される名前
-```
-
-### ③ Cloudflare Pages プロジェクト作成
-
-Cloudflare Pages → **「Create a project」→「Connect to Git」** でこのリポジトリを選択。
-
-ビルド設定：
-| 項目 | 値 |
-|---|---|
-| Framework preset | **None** |
-| Build command | `npm run build` |
-| Build output directory | `dist` |
-
-**重要：** `npm install` は Cloudflare が自動で実行する。Build command は `npm run build` のみでよい。shia2n-core は Public な GitHub リポなので、追加の認証トークンは不要。
-
-### ④ 環境変数を設定
-
-Cloudflare Pages → Settings → Environment variables に以下を全て追加（Production & Preview 両方）：
-
-```
-VITE_SUPABASE_URL                    ← Supabase プロジェクトのURL
-VITE_SUPABASE_ANON_KEY               ← Supabase の anon key
-VITE_FIREBASE_API_KEY                ← Firebase コンソールから取得
-VITE_FIREBASE_AUTH_DOMAIN            ← Firebase コンソールから取得
-VITE_FIREBASE_PROJECT_ID             ← Firebase コンソールから取得
-VITE_FIREBASE_STORAGE_BUCKET         ← Firebase コンソールから取得
-VITE_FIREBASE_MESSAGING_SENDER_ID    ← Firebase コンソールから取得
-VITE_FIREBASE_APP_ID                 ← Firebase コンソールから取得
-VITE_FIREBASE_DATABASE_ID            ← Firestore のカスタムDB ID（必須・忘れずに）
-ANTHROPIC_API_KEY                    ← AI機能を使う場合のみ
-```
-
-既存アプリ（他のCloudflare Pagesプロジェクト）の環境変数をコピペするのが最速。値は全アプリで共通。
-
-### ⑤ Firebase Authorized Domains に追加
-
-Firebase Console → Authentication → Settings → **Authorized domains** → **Add domain**
-
-アプリのURL（例：`my-new-app.pages.dev`、または独自ドメインのサブドメイン）を追加。**これを忘れるとログインポップアップが開いてすぐ閉じる**。
-
-### ⑥ ポータルに新アプリを登録
-
-[portal.shia2n.jp](https://portal.shia2n.jp) の App Management で：
-- App ID: `my-new-app`（Step ② の APP_ID と同じ）
-- URL: `https://my-new-app.pages.dev` またはカスタムドメイン
-- Tier: 必要に応じて設定
-
-または Firestore を直接編集：
-- `users/{自分のUID}` → `allowedApps` 配列に `my-new-app` を追加
-
-### ⑦ デプロイ
-
-Cloudflare Pages → Deployments → **「Retry deployment」** または任意の Commit で自動デプロイ。
-
-ブラウザで `https://my-new-app.pages.dev` にアクセスして、Google ログインできれば成功。
+- 要件：スワイプファイルアプリ 要件定義 v1.5（シアニン担当 S3 成果物・本書が唯一の正）
+- 基盤：shia2n-app-template ＋ shia2n-core（React + Vite + Supabase + Cloudflare Pages）
 
 ---
 
-## このテンプレートに含まれるもの
+## 環境変数（Cloudflare Pages → Settings → Environment variables）
+
+既存アプリからコピペできるもの：
 
 ```
-├── package.json                 shia2n-core を依存として参照（Public）
-├── vite.config.js               node_modules/shia2n-core の JSX を変換する設定
-├── index.html                   DM Mono + Noto Sans JP
-├── public/_redirects            SPA ルーティング
-├── functions/api/claude.js      Claude API プロキシ
-├── src/
-│   ├── main.jsx                 AuthGuard で App をラップ
-│   ├── App.jsx                  ヘッダー + タブ切替の最小構成
-│   ├── constants.js             APP_ID と APP_NAME
-│   └── screens/Home.jsx         サンプル画面
+VITE_SUPABASE_URL
+VITE_SUPABASE_ANON_KEY
+VITE_FIREBASE_API_KEY
+VITE_FIREBASE_AUTH_DOMAIN
+VITE_FIREBASE_PROJECT_ID
+VITE_FIREBASE_STORAGE_BUCKET
+VITE_FIREBASE_MESSAGING_SENDER_ID
+VITE_FIREBASE_APP_ID
+VITE_FIREBASE_DATABASE_ID
+ANTHROPIC_API_KEY
 ```
+
+このアプリだけで新しく必要なもの：
+
+```
+ZEUS_EXTERNAL_SECRET   Zeus v2 外部API の合言葉（Zeus 側と同じ値）
+ZEUS_USER_ID           Zeus v2 側のユーザーID（索引の登録先）
+```
+
+Production / Preview の両方に設定する。
 
 ---
 
-## shia2n-core から使えるもの
+## 診断ページ
 
-```jsx
-import {
-  AuthGuard, useAuthUid, useAuthUser,      // 認証
-  auth, db, firebaseApp,                    // Firebase
-  supabase,                                 // Supabase クライアント
-  fetchAll, fetchOne, insertOne, updateOne, deleteOne, upsertOne,  // 汎用CRUD
-  T, fmt, fmtK, currentMonth, today,        // トークン・ユーティリティ
-  card, lb10, mc, inp, solidBtn, ghostBtn, mono,  // スタイル
-  Delta,                                    // 共通コンポーネント
-} from "shia2n-core";
-```
-
-**注意：** これらを**自分で再実装しない**。全てshia2n-coreから使う。特に AuthGuard は Firestore のカスタムDB ID を内部で正しく参照しているので、自前で `getFirestore()` を呼ばないこと。
+デプロイ後、`https://<アプリのURL>/diag` を開くと、環境変数・Supabase 接続・
+テーブル実在・Zeus 疎通・Claude 疎通を1画面で確認できる。
+生の JSON が欲しいときは `/diag?json=1`。
 
 ---
 
-## Supabase テーブル設計の規則
+## Supabase
 
-- テーブル名は **アプリごとのプレフィックス** を必ずつける（`xx_` など）
-- `user_id` カラム（text型）を必ず持つ — shia2n-core の汎用 CRUD が自動でフィルタ
-- 別名（`owner_uid`、`author_id` 等）は使わない — エコシステム全体の統一
+`sql/01_pre_check.sql`（事前確認）→ `sql/02_create_tables.sql`（作成）の順に
+Supabase SQL Editor で実行する。どちらも何回実行しても同じ結果になる。
 
----
-
-## 必須チェックリスト（デプロイ前）
-
-```
-□ src/constants.js の APP_ID と APP_NAME を書き換えた
-□ Cloudflare Pages の環境変数を全て設定した（特に VITE_FIREBASE_DATABASE_ID）
-□ Cloudflare Pages の Build command が「npm run build」になっている
-□ Firebase の Authorized Domains に新URLを追加した
-□ ポータルの App Management に新アプリを登録した
-□ Googleログイン → Home画面表示を確認した
-```
+- `sw_swipes`：スワイプ本体（参照回数 `ref_count` / 最終参照日時 `last_referenced_at` を含む）
+- `sw_zeus_orphans`：削除済みスワイプの Zeus 索引ID（掃除待ち）
+- `sw_increment_ref(uuid)`：参照回数を1つ増やす関数（詳細画面表示・`swipe__get` から呼ぶ）
 
 ---
 
-## 変更履歴
+## 実装ブロック
 
-- 2026-04-22：Build command を `npm run build` に簡素化（shia2n-core Public化に伴い、GITHUB_TOKEN 方式は廃止）
+| ブロック | 内容 | 状態 |
+|---|---|---|
+| 1 | DB ＋ /diag | 完了 |
+| 2 | F1/F3/F6（UI基本） | 未着手 |
+| 3 | F4（MCP・独立Worker） | 未着手 |
+| 4 | F5（Zeus索引連携） | 未着手 |
+| 5 | F2（一括取り込み） | 未着手 |
