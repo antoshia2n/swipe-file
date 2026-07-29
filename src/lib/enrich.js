@@ -15,7 +15,7 @@ const EXCERPT_MAX = 200; // 一覧カード用の短い抜粋（要件 v1.7 §4.
  *
  * 例外は投げない。埋められた分だけ返し、埋まらなかった理由を notes で伝える。
  */
-export async function enrichSwipe({ uid, url = "", body = "", reason = "", fileName = "" }) {
+export async function enrichSwipe({ uid, url = "", body = "", reason = "", fileName = "", manualTitle = "" }) {
   const notes = [];
   const hasUrl  = url.trim().length > 0;
   const hasBody = body.trim().length > 0;
@@ -83,6 +83,7 @@ export async function enrichSwipe({ uid, url = "", body = "", reason = "", fileN
   // 4. 見出しと抜粋を1か所の規則で決める（src/lib/titling.js）。
   //    AI が使えない期間でも、ここで人が読める見出しになるようにする。
   const titled = deriveTitle({
+    manualTitle,
     pageTitle,
     aiTitle,
     body:     body.trim(),

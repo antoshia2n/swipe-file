@@ -8,10 +8,11 @@
  * 決め方（上から順に見て、最初に取れたものを採用する）
  *   1. 人が入力した見出し
  *   2. リンク先のページ題名（OGP）
- *   3. AI が付けた見出し
- *   4. 本文の書き出し（記号と改行を掃除し、最初の文の区切りまで）
- *   5. ファイル名（拡張子を除く）
- *   6. 「見出し未設定」
+ *   3. 本文が Markdown なら、その1行目の見出し
+ *   4. AI が付けた見出し
+ *   5. 本文の書き出し（記号と改行を掃除し、最初の文の区切りまで）
+ *   6. ファイル名（拡張子を除く）
+ *   7. 「見出し未設定」
  *
  * URL そのものは見出しにしない（何の素材か分からないため）。
  * 2〜6 で決めた見出しは「自動」扱い（title_auto = true）にし、後からまとめて
@@ -53,6 +54,13 @@ export function titleFromText(raw = "", max = TITLE_MAX) {
   return head;
 }
 
+/** 本文が Markdown で、1行目が見出し行（# …）ならその行を返す */
+export function headingFromMarkdown(body = "") {
+  const first = String(body ?? "").split(/\r?\n/).map(line => line.trim()).find(Boolean) ?? "";
+  if (!/^#{1,6}\s+/.test(first)) return "";
+  return cleanText(first).slice(0, TITLE_LIMIT);
+}
+
 /** ファイル名から拡張子を落とす */
 export function fileBaseName(name = "") {
   const base = String(name ?? "").split(/[\\/]/).pop() ?? "";
@@ -83,6 +91,10 @@ export function deriveTitle({
 
   const page = cleanText(pageTitle);
   if (page) return { title: page.slice(0, TITLE_LIMIT), auto: true };
+
+  // 文書そのものの見出し行は、AI の言い換えより正確なので先に見る
+  const heading = headingFromMarkdown(body);
+  if (heading) return { title: heading, auto: true };
 
   const ai = cleanText(aiTitle);
   if (ai) return { title: ai.slice(0, TITLE_LIMIT), auto: true };

@@ -47,6 +47,29 @@ export async function onRequestPost(context) {
     return new Response(JSON.stringify({ error: "url required" }), { status: 400, headers: JSON_HEADERS });
   }
 
+  // YouTube は通常のページ取得では題名が取れない。公式の口（oEmbed）を使う。
+  if (/(^|\/\/)(www\.)?(youtube\.com|youtu\.be)/i.test(url)) {
+    try {
+      const res = await fetch(
+        `https://www.youtube.com/oembed?url=${encodeURIComponent(url)}&format=json`,
+        { signal: AbortSignal.timeout(8000) }
+      );
+      if (res.ok) {
+        const data = await res.json();
+        return new Response(JSON.stringify({
+          fetched:     true,
+          title:       data.title ?? null,
+          description: null,
+          image:       data.thumbnail_url ?? null,
+          site_name:   "YouTube",
+          author:      data.author_name ?? null,
+        }), { headers: JSON_HEADERS });
+      }
+    } catch {
+      // 取れなければ下の通常の取得へ進む
+    }
+  }
+
   let html = "";
   try {
     const res = await fetch(url, {

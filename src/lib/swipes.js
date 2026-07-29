@@ -44,15 +44,18 @@ export function detectSourceType(url = "", { hasBody = false, isPdf = false } = 
  * DB 側にも同じ制約を張ってあるが、画面で先に止めて分かりやすく伝える。
  * @returns {string} 問題があれば理由、無ければ空文字
  */
-export function validateSwipe({ reason, source_url, body, file_url }, { allowDraft = false } = {}) {
+export function validateSwipe({ reason, title, source_url, body, file_url }, { allowDraft = false } = {}) {
   const hasReason    = (reason ?? "").trim().length > 0;
+  const hasTitle     = (title ?? "").trim().length > 0;
   const hasSubstance =
     (source_url ?? "").trim().length > 0 ||
     (body ?? "").trim().length > 0 ||
     (file_url ?? "").trim().length > 0;
 
   if (!hasSubstance) return "URL・本文・ファイルのうち、少なくとも1つが必要です";
-  if (!hasReason && !allowDraft) return "「なぜ良いか」の1行が必要です";
+  // allowDraft は一括取り込みの仮登録だけの例外（一覧で赤く出る）
+  if (!hasTitle  && !allowDraft) return "見出しが必要です";
+  if (!hasReason && !allowDraft) return "「なぜ良いか・要約」の1行が必要です";
   return "";
 }
 
@@ -121,7 +124,8 @@ export async function createSwipe(uid, fields) {
   const url    = (fields.source_url ?? "").trim();
   const file   = (fields.file_url ?? "").trim();
 
-  const problem = validateSwipe({ reason, source_url: url, body, file_url: file }, { allowDraft: true });
+  // 画面・MCP の入口で先に検査済み。ここは一括取り込みの仮登録も通すため allowDraft
+  const problem = validateSwipe({ reason, title: fields.title, source_url: url, body, file_url: file }, { allowDraft: true });
   if (problem) throw new Error(problem);
 
   // 見出しは1か所の規則で決める（src/lib/titling.js）。

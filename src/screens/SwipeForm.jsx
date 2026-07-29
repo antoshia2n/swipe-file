@@ -16,6 +16,7 @@ const EMPTY_EXTRA = {
 
 export default function SwipeForm({ uid, onSaved }) {
   const [url, setUrl]           = useState("");
+  const [title, setTitle]       = useState("");
   const [body, setBody]         = useState("");
   const [reason, setReason]     = useState("");
   const [extra, setExtra]       = useState(EMPTY_EXTRA);
@@ -27,7 +28,7 @@ export default function SwipeForm({ uid, onSaved }) {
   const [error, setError]       = useState("");
   const [saving, setSaving]     = useState(false);
 
-  const problem = validateSwipe({ reason, source_url: url, body, file_url: file ? "pending" : fileUrl });
+  const problem = validateSwipe({ reason, title, source_url: url, body, file_url: file ? "pending" : fileUrl });
 
   async function handleEnrich() {
     setError("");
@@ -69,6 +70,7 @@ export default function SwipeForm({ uid, onSaved }) {
     const { values, notes: n } = await enrichSwipe({
       uid, url: url.trim(), body: bodyText, reason: reason.trim(),
       fileName: file?.name ?? "",
+      manualTitle: title.trim(),
     });
     if (fileType && fileType !== "その他") values.source_type = fileType;
 
@@ -91,7 +93,7 @@ export default function SwipeForm({ uid, onSaved }) {
       });
       // Zeus 索引への登録（失敗しても保存自体は成功させる。§F5）
       syncOneToZeus(saved.id);
-      setUrl(""); setBody(""); setReason("");
+      setUrl(""); setBody(""); setReason(""); setTitle("");
       setFile(null); setFileUrl("");
       setExtra(EMPTY_EXTRA); setNotes([]); setPhase("input");
       onSaved?.();
@@ -114,8 +116,18 @@ export default function SwipeForm({ uid, onSaved }) {
       {error && <Notice kind="error">{error}</Notice>}
 
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.7, marginBottom: 12 }}>
-        「なぜ良いか」は必ず必要です。URL・本文・ファイルは、どれか1つあれば登録できます。
+        「見出し」と「なぜ良いか・要約」は必ず必要です。<br />
+        URL・本文・ファイルは、どれか1つあれば登録できます。
       </div>
+
+      <Field label="見出し（必須）">
+        <input
+          style={inp}
+          value={title}
+          onChange={e => setTitle(e.target.value)}
+          placeholder="何の素材か、ひと目で分かる言葉で"
+        />
+      </Field>
 
       <Field label="URL（任意）">
         <input
@@ -162,7 +174,7 @@ export default function SwipeForm({ uid, onSaved }) {
         )}
       </Field>
 
-      <Field label="なぜ良いか・1行（必須）">
+      <Field label="なぜ良いか・要約・1行（必須）">
         <input
           style={inp}
           value={reason}

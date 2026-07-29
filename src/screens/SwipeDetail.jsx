@@ -43,7 +43,9 @@ export default function SwipeDetail({ id, onBack, onChanged }) {
   }, [id]);
 
   async function handleSave() {
-    const problem = validateSwipe(draft, { allowDraft: true });
+    // 見出しと理由はどちらも必須（一括取り込みの仮登録から編集する場合だけ、
+    // 理由を書いた時点で通常の状態に戻る）
+    const problem = validateSwipe(draft, { allowDraft: draft.status === STATUS_DRAFT });
     if (problem) { setError(problem); return; }
 
     setSaving(true);
