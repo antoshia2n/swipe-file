@@ -3,6 +3,7 @@ import { T, card, inp, solidBtn, ghostBtn } from "shia2n-core";
 import { Field, Notice, TagChips } from "../components/ui.jsx";
 import { enrichSwipe } from "../lib/enrich.js";
 import { syncOneToZeus } from "../lib/zeus.js";
+import { uploadFile, parseFile, classifyFile, ACCEPT, MAX_BYTES } from "../lib/files.js";
 import {
   createSwipe, detectSourceType, validateSwipe,
   SOURCE_TYPES, CONTENT_AXES, VISIBILITIES, VIS_PRIVATE,
@@ -19,23 +20,59 @@ export default function SwipeForm({ uid, onSaved }) {
   const [reason, setReason]     = useState("");
   const [extra, setExtra]       = useState(EMPTY_EXTRA);
   const [tagInput, setTagInput] = useState("");
+  const [file, setFile]         = useState(null);
+  const [fileUrl, setFileUrl]   = useState("");
   const [phase, setPhase]       = useState("input"); // input | loading | review
   const [notes, setNotes]       = useState([]);
   const [error, setError]       = useState("");
   const [saving, setSaving]     = useState(false);
 
-  const problem = validateSwipe({ reason, source_url: url, body });
+  const problem = validateSwipe({ reason, source_url: url, body, file_url: file ? "pending" : fileUrl });
 
   async function handleEnrich() {
     setError("");
     if (problem) { setError(problem); return; }
 
     setPhase("loading");
+    const collected = [];
+    let uploadedUrl = fileUrl;
+    let bodyText    = body.trim();
+    let fileType    = "";
+
+    // 1. 原本を保存して、可能なら本文を取り出す（§F7）
+    if (file) {
+      const info = classifyFile(file);
+      fileType   = info.sourceType;
+
+      const up = await uploadFile(uid, file);
+      if (!up.ok) {
+        setError(up.reason);
+        setPhase("input");
+        return;
+      }
+      uploadedUrl = up.file_url;
+      setFileUrl(up.file_url);
+
+      if (info.parse) {
+        const parsed = await parseFile(up.file_url, file.type);
+        if (parsed.ok && parsed.body) {
+          if (!bodyText) { bodyText = parsed.body; setBody(parsed.body); }
+        } else if (!parsed.skipped) {
+          collected.push(`原本から本文を取り出せませんでした（${parsed.reason ?? "理由不明"}）。原本は保存済みなので、後から本文を貼れます`);
+        }
+      } else {
+        collected.push("画像は本文の取り出しを行いません（原本のみ保存します）");
+      }
+    }
+
+    // 2. 残りの項目を埋める
     const { values, notes: n } = await enrichSwipe({
-      uid, url: url.trim(), body: body.trim(), reason: reason.trim(),
+      uid, url: url.trim(), body: bodyText, reason: reason.trim(),
     });
+    if (fileType && fileType !== "その他") values.source_type = fileType;
+
     setExtra({ ...EMPTY_EXTRA, ...values });
-    setNotes(n);
+    setNotes([...collected, ...n]);
     setPhase("review");
   }
 
@@ -46,12 +83,14 @@ export default function SwipeForm({ uid, onSaved }) {
       const saved = await createSwipe(uid, {
         source_url: url.trim(),
         body:       body.trim(),
+        file_url:   fileUrl,
         reason:     reason.trim(),
         ...extra,
       });
       // Zeus 索引への登録（失敗しても保存自体は成功させる。§F5）
       syncOneToZeus(saved.id);
       setUrl(""); setBody(""); setReason("");
+      setFile(null); setFileUrl("");
       setExtra(EMPTY_EXTRA); setNotes([]); setPhase("input");
       onSaved?.();
     } catch (err) {
@@ -73,7 +112,7 @@ export default function SwipeForm({ uid, onSaved }) {
       {error && <Notice kind="error">{error}</Notice>}
 
       <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.7, marginBottom: 12 }}>
-        「なぜ良いか」は必ず必要です。URL と本文は、どちらか片方だけで登録できます。
+        「なぜ良いか」は必ず必要です。URL・本文・ファイルは、どれか1つあれば登録できます。
       </div>
 
       <Field label="URL（任意）">
@@ -97,6 +136,30 @@ export default function SwipeForm({ uid, onSaved }) {
         />
       </Field>
 
+      <Field label="ファイル（任意・PDF / テキスト / 画像・10MBまで）">
+        <input
+          type="file"
+          accept={ACCEPT}
+          onChange={e => {
+            const f = e.target.files?.[0] ?? null;
+            if (f && f.size > MAX_BYTES) {
+              setError(`ファイルが大きすぎます（上限 10MB／このファイルは ${(f.size / 1024 / 1024).toFixed(1)}MB）`);
+              setFile(null);
+              e.target.value = "";
+              return;
+            }
+            setError("");
+            setFile(f);
+          }}
+          style={{ ...inp, padding: "7px 9px" }}
+        />
+        {file && (
+          <div style={{ fontSize: 10, color: T.faint, marginTop: 3 }}>
+            {file.name}（{(file.size / 1024).toFixed(0)}KB）／PDF・テキストは本文を自動で取り出します
+          </div>
+        )}
+      </Field>
+
       <Field label="なぜ良いか・1行（必須）">
         <input
           style={inp}
@@ -118,7 +181,7 @@ export default function SwipeForm({ uid, onSaved }) {
           disabled={!!problem || phase === "loading"}
           style={{ ...solidBtn(problem ? T.faint : T.text), width: "100%", justifyContent: "center", padding: "9px 14px", fontSize: 12 }}
         >
-          {phase === "loading" ? "残りを埋めています…" : "AI補完して保存へ"}
+          {phase === "loading" ? (file ? "ファイルを読み込んでいます…" : "残りを埋めています…") : "AI補完して保存へ"}
         </button>
       )}
 

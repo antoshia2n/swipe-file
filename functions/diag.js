@@ -143,6 +143,38 @@ async function checkZeus(env) {
   }
 }
 
+async function checkStorage(env) {
+  const name = "原本ファイルの保存先（Storage）";
+  if (!env.VITE_SUPABASE_URL || !env.VITE_SUPABASE_ANON_KEY) {
+    return { name, status: "ng", detail: "Supabase の環境変数が未設定のため検証できません" };
+  }
+  const base = env.VITE_SUPABASE_URL.replace(/\/+$/, "");
+  const path = `_diag/probe-${Date.now()}.txt`;
+  const auth = {
+    apikey:        env.VITE_SUPABASE_ANON_KEY,
+    Authorization: `Bearer ${env.VITE_SUPABASE_ANON_KEY}`,
+  };
+  try {
+    // 実際に書いてみて、すぐ消す（残骸を作らない）
+    const put = await fetch(`${base}/storage/v1/object/swipe-files/${path}`, {
+      method:  "POST",
+      headers: { ...auth, "Content-Type": "text/plain" },
+      body:    "diag",
+    });
+    if (!put.ok) {
+      const text = await put.text().catch(() => "");
+      if (put.status === 404 || /not found|bucket/i.test(text)) {
+        return { name, status: "ng", detail: "保存先が未作成です。sql/04_storage.sql を実行してください" };
+      }
+      return { name, status: "ng", detail: `書き込めません：${put.status} ${text.slice(0, 140)}` };
+    }
+    await fetch(`${base}/storage/v1/object/swipe-files/${path}`, { method: "DELETE", headers: auth });
+    return { name, status: "ok", detail: "書き込みと削除を確認（テスト用ファイルは残していません）" };
+  } catch (err) {
+    return { name, status: "ng", detail: `接続できません：${err.message}` };
+  }
+}
+
 async function checkClaude(env) {
   const name = "Claude API 疎通（claude.js プロキシと同経路）";
   if (!env.ANTHROPIC_API_KEY) {
@@ -231,15 +263,16 @@ function escapeHtml(s) {
 export async function onRequestGet(context) {
   const { request, env } = context;
 
-  const [swipes, orphans, refCounter, zeus, claude] = await Promise.all([
+  const [swipes, orphans, refCounter, storage, zeus, claude] = await Promise.all([
     checkSupabaseTable(env, "sw_swipes", "id,zeus_item_id,ref_count,last_referenced_at"),
     checkSupabaseTable(env, "sw_zeus_orphans", "id,zeus_item_id,source_url"),
     checkRefCounter(env),
+    checkStorage(env),
     checkZeus(env),
     checkClaude(env),
   ]);
 
-  const checks = [...checkEnv(env), swipes, orphans, refCounter, zeus, claude];
+  const checks = [...checkEnv(env), swipes, orphans, refCounter, storage, zeus, claude];
   const result = {
     app:        "swipe-file",
     checked_at: new Date().toISOString(),

@@ -1,4 +1,5 @@
 import { supabase } from "shia2n-core";
+import { removeFile } from "./files.js";
 
 /* ── 選択肢（要件 v1.5 §4.1 の値をそのまま） ───────────────────────────── */
 
@@ -186,6 +187,9 @@ export async function deleteSwipe(swipe) {
   }
   const { error } = await supabase.from(TABLE).delete().eq("id", swipe.id);
   if (error) throw new Error(error.message);
+
+  // 原本ファイルも消す（§F6）。ここで失敗しても本体は削除済みなので中断しない
+  if (swipe.file_url) await removeFile(swipe.file_url).catch(() => {});
 }
 
 /* ── 参照回数の加算（要件 §F4「1回」の定義） ────────────────────────────── */

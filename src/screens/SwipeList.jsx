@@ -130,6 +130,7 @@ function SwipeCard({ row, onOpen }) {
 
       <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 8, alignItems: "center" }}>
         <Badge text={row.source_type} />
+        {row.file_url && !row.body && <Badge text="解析失敗" color={T.red} />}
         {row.content_axis && <Badge text={row.content_axis} />}
         {(row.topic_tags ?? []).map(t => (
           <span key={t} style={{ fontSize: 10, color: T.muted, background: T.s2, borderRadius: 10, padding: "1px 7px" }}>{t}</span>

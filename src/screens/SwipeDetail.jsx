@@ -137,6 +137,9 @@ export default function SwipeDetail({ id, onBack, onChanged }) {
       {draft.status === STATUS_DRAFT && (
         <Notice kind="warn">理由が未記入です。1行書いて保存すると通常の状態に戻ります。</Notice>
       )}
+      {row.file_url && !row.body && (
+        <Notice kind="warn">原本から本文を取り出せませんでした。原本を開いて、下の本文欄に貼り付けてください。</Notice>
+      )}
 
       {/* 出典と本文を上に大きく（要件 §6） */}
       <div style={{ ...card, padding: "14px 16px", marginBottom: 12 }}>

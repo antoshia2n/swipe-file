@@ -2,7 +2,7 @@
 
 参考にしたい他者コンテンツを「URL・理由・タグ」の3点セットで貯め、AI が制作時に1発で参照できる状態を作るアプリ。
 
-- 要件：Notion「スワイプファイルアプリ 要件定義 v1.7」が唯一の正
+- 要件：Notion「スワイプファイルアプリ 要件定義 v1.8」が唯一の正
   https://app.notion.com/p/3ab9c6c1c439817abee4ee95f6a8a906
   （チャットへのMD貼付での受け渡しは廃止。改訂は常に上記ページ）
 - 基盤：shia2n-app-template ＋ shia2n-core（React + Vite + Supabase + Cloudflare Pages）
@@ -48,7 +48,8 @@ Production / Preview の両方に設定する。
 ## Supabase
 
 `sql/01_pre_check.sql`（事前確認）→ `sql/02_create_tables.sql`（作成）→
-`sql/03_v17_columns.sql`（v1.7 のカラム追加）の順に Supabase SQL Editor で実行する。
+`sql/03_v17_columns.sql`（カラム追加）→ `sql/04_storage.sql`（原本ファイルの保存先）
+の順に Supabase SQL Editor で実行する。
 いずれも何回実行しても同じ結果になる。
 
 - `sw_swipes`：スワイプ本体（本文 `body` / 原本 `file_url` / 公開区分 `visibility` / 参照回数 `ref_count` を含む）
@@ -73,6 +74,6 @@ Production / Preview の両方に設定する。
 | 2 | F1/F3/F6（UI基本） | 完了 |
 | 2.5 | v1.7 カラム追加＋保存条件の修正 | 完了 |
 | 3 | F4（MCP・独立Worker） | 未着手 |
-| 3.5 | F7（ファイル取り込み） | 未着手 |
+| 3.5 | F7（ファイル取り込み） | 完了 |
 | 4 | F5（Zeus索引連携） | 完了 |
 | 5 | F2（一括取り込み） | 未着手 |
