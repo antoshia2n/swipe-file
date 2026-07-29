@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { useAuthUid, T } from "shia2n-core";
 import { APP_NAME, TABS, TAB_LIST, TAB_REGISTER } from "./constants.js";
 import SwipeList from "./screens/SwipeList.jsx";
-import SwipeForm from "./screens/SwipeForm.jsx";
+import Register from "./screens/Register.jsx";
 import SwipeDetail from "./screens/SwipeDetail.jsx";
 import { retryPendingZeusSync } from "./lib/zeus.js";
 
@@ -48,7 +48,7 @@ export default function App() {
             onChanged={bumpReload}
           />
         ) : tab === TAB_REGISTER ? (
-          <SwipeForm
+          <Register
             uid={uid}
             onSaved={() => { bumpReload(); setTab(TAB_LIST); }}
           />
