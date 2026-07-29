@@ -2,12 +2,19 @@ import { supabase } from "shia2n-core";
 
 /* ── 選択肢（要件 v1.5 §4.1 の値をそのまま） ───────────────────────────── */
 
-export const SOURCE_TYPES  = ["X", "note", "YouTube", "ブログ", "その他"];
+export const SOURCE_TYPES  = ["X", "note", "YouTube", "ブログ", "ノート", "PDF", "その他"];
 export const CONTENT_AXES  = ["思考系", "習慣系", "攻略系", "その他"];
 export const STATUS_ACTIVE = "未活用";
 export const STATUS_USED   = "活用済";
 export const STATUS_DRAFT  = "reason未記入";
 export const STATUSES      = [STATUS_ACTIVE, STATUS_USED, STATUS_DRAFT];
+
+export const VIS_PRIVATE = "private";
+export const VIS_SAMPLE  = "sample";
+export const VISIBILITIES = [
+  { value: VIS_PRIVATE, label: "自分用" },
+  { value: VIS_SAMPLE,  label: "見本（将来 生徒に公開）" },
+];
 
 export const SORT_CREATED = "created";
 export const SORT_REF     = "ref";
@@ -17,13 +24,33 @@ const ORPHANS = "sw_zeus_orphans";
 
 /* ── URL から媒体を自動判定（要件 §4.1 source_type） ────────────────────── */
 
-export function detectSourceType(url = "") {
-  const u = url.toLowerCase();
+export function detectSourceType(url = "", { hasBody = false, isPdf = false } = {}) {
+  const u = (url ?? "").toLowerCase();
   if (/(^|\/\/)(www\.)?(x\.com|twitter\.com)\//.test(u)) return "X";
   if (/(^|\/\/)(www\.)?note\.com\//.test(u))             return "note";
   if (/youtube\.com|youtu\.be/.test(u))                  return "YouTube";
   if (/^https?:\/\//.test(u))                            return "ブログ";
+  // URL が無い場合は投入経路で決める（§4.1 source_type）
+  if (isPdf)   return "PDF";
+  if (hasBody) return "ノート";
   return "その他";
+}
+
+/**
+ * 保存の最低条件（要件 v1.7 §5 F1）。
+ * DB 側にも同じ制約を張ってあるが、画面で先に止めて分かりやすく伝える。
+ * @returns {string} 問題があれば理由、無ければ空文字
+ */
+export function validateSwipe({ reason, source_url, body, file_url }, { allowDraft = false } = {}) {
+  const hasReason    = (reason ?? "").trim().length > 0;
+  const hasSubstance =
+    (source_url ?? "").trim().length > 0 ||
+    (body ?? "").trim().length > 0 ||
+    (file_url ?? "").trim().length > 0;
+
+  if (!hasSubstance) return "URL・本文・ファイルのうち、少なくとも1つが必要です";
+  if (!hasReason && !allowDraft) return "「なぜ良いか」の1行が必要です";
+  return "";
 }
 
 /* ── 一覧・検索（要件 §F3） ─────────────────────────────────────────────── */
@@ -50,7 +77,13 @@ export async function listSwipes(uid, opts = {}) {
   const kw = safeKeyword(keyword);
   if (kw) {
     q = q.or(
-      [`title.ilike.%${kw}%`, `reason.ilike.%${kw}%`, `excerpt.ilike.%${kw}%`, `author.ilike.%${kw}%`].join(",")
+      [
+        `title.ilike.%${kw}%`,
+        `reason.ilike.%${kw}%`,
+        `body.ilike.%${kw}%`,
+        `excerpt.ilike.%${kw}%`,
+        `author.ilike.%${kw}%`,
+      ].join(",")
     );
   }
   if (tags.length)  q = q.contains("topic_tags", tags);
@@ -81,16 +114,26 @@ export async function getSwipe(id) {
 
 export async function createSwipe(uid, fields) {
   const reason = (fields.reason ?? "").trim();
+  const body   = (fields.body ?? "").trim();
+  const url    = (fields.source_url ?? "").trim();
+  const file   = (fields.file_url ?? "").trim();
+
+  const problem = validateSwipe({ reason, source_url: url, body, file_url: file }, { allowDraft: true });
+  if (problem) throw new Error(problem);
+
   const row = {
     user_id:      uid,
-    source_url:   (fields.source_url ?? "").trim(),
+    source_url:   url || null,
+    body:         body || null,
+    file_url:     file || null,
     reason,
     topic_tags:   fields.topic_tags ?? [],
     title:        (fields.title ?? "").trim(),
-    source_type:  fields.source_type || detectSourceType(fields.source_url),
+    source_type:  fields.source_type || detectSourceType(url, { hasBody: !!body }),
     author:       fields.author || null,
     excerpt:      fields.excerpt || null,
     content_axis: fields.content_axis || null,
+    visibility:   fields.visibility || VIS_PRIVATE,
     // 理由が空のまま登録できるのは一括取り込みの仮登録だけ（§F2）
     status:       reason ? STATUS_ACTIVE : STATUS_DRAFT,
     zeus_synced:  false,

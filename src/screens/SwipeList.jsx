@@ -122,6 +122,12 @@ function SwipeCard({ row, onOpen }) {
         {isDraft ? "理由が未記入です。開いて1行足してください" : row.reason}
       </div>
 
+      {row.excerpt && (
+        <div style={{ fontSize: 11, color: T.muted, marginTop: 6, lineHeight: 1.7, opacity: 0.85 }}>
+          {row.excerpt}
+        </div>
+      )}
+
       <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 8, alignItems: "center" }}>
         <Badge text={row.source_type} />
         {row.content_axis && <Badge text={row.content_axis} />}

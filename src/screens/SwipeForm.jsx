@@ -1,35 +1,39 @@
 import { useState } from "react";
 import { T, card, inp, solidBtn, ghostBtn } from "shia2n-core";
 import { Field, Notice, TagChips } from "../components/ui.jsx";
-import { enrichFromUrl } from "../lib/enrich.js";
-import { createSwipe, detectSourceType, SOURCE_TYPES, CONTENT_AXES } from "../lib/swipes.js";
+import { enrichSwipe } from "../lib/enrich.js";
+import {
+  createSwipe, detectSourceType, validateSwipe,
+  SOURCE_TYPES, CONTENT_AXES, VISIBILITIES, VIS_PRIVATE,
+} from "../lib/swipes.js";
 
-const EMPTY = {
+const EMPTY_EXTRA = {
   title: "", topic_tags: [], source_type: "その他",
-  author: "", excerpt: "", content_axis: "",
+  author: "", excerpt: "", content_axis: "", visibility: VIS_PRIVATE,
 };
 
 export default function SwipeForm({ uid, onSaved }) {
-  const [url, setUrl]         = useState("");
-  const [reason, setReason]   = useState("");
-  const [extra, setExtra]     = useState(EMPTY);
+  const [url, setUrl]           = useState("");
+  const [body, setBody]         = useState("");
+  const [reason, setReason]     = useState("");
+  const [extra, setExtra]       = useState(EMPTY_EXTRA);
   const [tagInput, setTagInput] = useState("");
-  const [phase, setPhase]     = useState("input"); // input | loading | review
-  const [notes, setNotes]     = useState([]);
-  const [error, setError]     = useState("");
-  const [saving, setSaving]   = useState(false);
+  const [phase, setPhase]       = useState("input"); // input | loading | review
+  const [notes, setNotes]       = useState([]);
+  const [error, setError]       = useState("");
+  const [saving, setSaving]     = useState(false);
 
-  const canSubmit = url.trim().length > 0 && reason.trim().length > 0;
+  const problem = validateSwipe({ reason, source_url: url, body });
 
   async function handleEnrich() {
     setError("");
-    if (!canSubmit) {
-      setError("URL と理由の両方が必要です（理由のない素材は保存できません）");
-      return;
-    }
+    if (problem) { setError(problem); return; }
+
     setPhase("loading");
-    const { values, notes: n } = await enrichFromUrl(url.trim(), reason.trim());
-    setExtra({ ...EMPTY, ...values });
+    const { values, notes: n } = await enrichSwipe({
+      uid, url: url.trim(), body: body.trim(), reason: reason.trim(),
+    });
+    setExtra({ ...EMPTY_EXTRA, ...values });
     setNotes(n);
     setPhase("review");
   }
@@ -38,8 +42,14 @@ export default function SwipeForm({ uid, onSaved }) {
     setError("");
     setSaving(true);
     try {
-      await createSwipe(uid, { source_url: url.trim(), reason: reason.trim(), ...extra });
-      setUrl(""); setReason(""); setExtra(EMPTY); setNotes([]); setPhase("input");
+      await createSwipe(uid, {
+        source_url: url.trim(),
+        body:       body.trim(),
+        reason:     reason.trim(),
+        ...extra,
+      });
+      setUrl(""); setBody(""); setReason("");
+      setExtra(EMPTY_EXTRA); setNotes([]); setPhase("input");
       onSaved?.();
     } catch (err) {
       setError(err.message);
@@ -59,7 +69,11 @@ export default function SwipeForm({ uid, onSaved }) {
     <div style={{ ...card, padding: "16px 18px" }}>
       {error && <Notice kind="error">{error}</Notice>}
 
-      <Field label="URL（必須）">
+      <div style={{ fontSize: 11, color: T.muted, lineHeight: 1.7, marginBottom: 12 }}>
+        「なぜ良いか」は必ず必要です。URL と本文は、どちらか片方だけで登録できます。
+      </div>
+
+      <Field label="URL（任意）">
         <input
           style={inp}
           value={url}
@@ -69,11 +83,15 @@ export default function SwipeForm({ uid, onSaved }) {
           autoCapitalize="off"
           autoCorrect="off"
         />
-        {url && (
-          <div style={{ fontSize: 10, color: T.faint, marginTop: 3 }}>
-            媒体の判定：{detectSourceType(url)}
-          </div>
-        )}
+      </Field>
+
+      <Field label="本文・書き起こし（任意・URLが無いときはこちら）">
+        <textarea
+          style={{ ...inp, minHeight: 110, resize: "vertical" }}
+          value={body}
+          onChange={e => setBody(e.target.value)}
+          placeholder="お手本の中身をそのまま貼る／自分の言葉で書き起こす"
+        />
       </Field>
 
       <Field label="なぜ良いか・1行（必須）">
@@ -85,11 +103,17 @@ export default function SwipeForm({ uid, onSaved }) {
         />
       </Field>
 
+      {(url || body) && (
+        <div style={{ fontSize: 10, color: T.faint, marginBottom: 12 }}>
+          媒体の判定：{detectSourceType(url, { hasBody: body.trim().length > 0 })}
+        </div>
+      )}
+
       {phase !== "review" && (
         <button
           onClick={handleEnrich}
-          disabled={!canSubmit || phase === "loading"}
-          style={{ ...solidBtn(canSubmit ? T.text : T.faint), width: "100%", justifyContent: "center", padding: "9px 14px", fontSize: 12 }}
+          disabled={!!problem || phase === "loading"}
+          style={{ ...solidBtn(problem ? T.faint : T.text), width: "100%", justifyContent: "center", padding: "9px 14px", fontSize: 12 }}
         >
           {phase === "loading" ? "残りを埋めています…" : "AI補完して保存へ"}
         </button>
@@ -138,13 +162,19 @@ export default function SwipeForm({ uid, onSaved }) {
             <input style={inp} value={extra.author} onChange={e => setExtra({ ...extra, author: e.target.value })} />
           </Field>
 
-          <Field label="本文の控え（消えても残るように）">
+          <Field label="一覧に出す短い抜粋">
             <textarea
-              style={{ ...inp, minHeight: 90, resize: "vertical" }}
+              style={{ ...inp, minHeight: 70, resize: "vertical" }}
               value={extra.excerpt}
               onChange={e => setExtra({ ...extra, excerpt: e.target.value })}
-              placeholder="X の投稿は削除されると消えるため、本文を貼っておくと安全です"
+              placeholder="全角200字程度。長い中身は本文欄へ"
             />
+          </Field>
+
+          <Field label="扱い">
+            <select style={inp} value={extra.visibility} onChange={e => setExtra({ ...extra, visibility: e.target.value })}>
+              {VISIBILITIES.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
+            </select>
           </Field>
 
           <div style={{ display: "flex", gap: 8 }}>

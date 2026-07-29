@@ -2,8 +2,8 @@ import { useEffect, useRef, useState } from "react";
 import { T, card, inp, lb10, solidBtn, ghostBtn } from "shia2n-core";
 import { Field, Badge, TagChips, Notice, statusColor } from "../components/ui.jsx";
 import {
-  getSwipe, updateSwipe, deleteSwipe, incrementRef, markUsed,
-  SOURCE_TYPES, CONTENT_AXES, STATUS_ACTIVE, STATUS_USED, STATUS_DRAFT,
+  getSwipe, updateSwipe, deleteSwipe, incrementRef, markUsed, validateSwipe,
+  SOURCE_TYPES, CONTENT_AXES, VISIBILITIES, STATUS_ACTIVE, STATUS_USED, STATUS_DRAFT,
 } from "../lib/swipes.js";
 
 export default function SwipeDetail({ id, onBack, onChanged }) {
@@ -43,11 +43,17 @@ export default function SwipeDetail({ id, onBack, onChanged }) {
   }, [id]);
 
   async function handleSave() {
+    const problem = validateSwipe(draft, { allowDraft: true });
+    if (problem) { setError(problem); return; }
+
     setSaving(true);
     setError("");
     try {
       await updateSwipe(id, {
-        source_url:   draft.source_url,
+        source_url:   draft.source_url || null,
+        body:         draft.body || null,
+        file_url:     draft.file_url || null,
+        visibility:   draft.visibility,
         reason:       draft.reason,
         title:        draft.title,
         topic_tags:   draft.topic_tags,
@@ -135,18 +141,36 @@ export default function SwipeDetail({ id, onBack, onChanged }) {
       {/* 出典と本文を上に大きく（要件 §6） */}
       <div style={{ ...card, padding: "14px 16px", marginBottom: 12 }}>
         <div style={{ ...lb10, marginBottom: 5 }}>出典</div>
-        <a
-          href={row.source_url}
-          target="_blank"
-          rel="noreferrer"
-          style={{ fontSize: 12, color: T.blue, wordBreak: "break-all", lineHeight: 1.6 }}
-        >
-          {row.source_url}
-        </a>
+        {row.source_url ? (
+          <a
+            href={row.source_url}
+            target="_blank"
+            rel="noreferrer"
+            style={{ fontSize: 12, color: T.blue, wordBreak: "break-all", lineHeight: 1.6 }}
+          >
+            {row.source_url}
+          </a>
+        ) : (
+          <div style={{ fontSize: 12, color: T.faint }}>URL なし（本文またはファイルの素材）</div>
+        )}
 
-        <div style={{ ...lb10, margin: "14px 0 5px" }}>本文の控え</div>
-        <div style={{ fontSize: 12, lineHeight: 1.8, whiteSpace: "pre-wrap", color: row.excerpt ? T.text : T.faint }}>
-          {row.excerpt || "未保存（下の編集欄から貼り付けられます）"}
+        {row.file_url && (
+          <div style={{ marginTop: 10 }}>
+            <div style={{ ...lb10, marginBottom: 5 }}>原本ファイル</div>
+            <a
+              href={row.file_url}
+              target="_blank"
+              rel="noreferrer"
+              style={{ fontSize: 12, color: T.blue, wordBreak: "break-all", lineHeight: 1.6 }}
+            >
+              原本を開く
+            </a>
+          </div>
+        )}
+
+        <div style={{ ...lb10, margin: "14px 0 5px" }}>本文</div>
+        <div style={{ fontSize: 12, lineHeight: 1.9, whiteSpace: "pre-wrap", color: row.body ? T.text : T.faint }}>
+          {row.body || "未保存（下の編集欄から貼り付けられます）"}
         </div>
 
         <div style={{ display: "flex", gap: 6, alignItems: "center", marginTop: 14, flexWrap: "wrap" }}>
@@ -206,12 +230,27 @@ export default function SwipeDetail({ id, onBack, onChanged }) {
           <input style={inp} value={draft.source_url} onChange={e => setDraft({ ...draft, source_url: e.target.value })} />
         </Field>
 
-        <Field label="本文の控え">
+        <Field label="本文（全文・検索対象）">
           <textarea
-            style={{ ...inp, minHeight: 120, resize: "vertical" }}
+            style={{ ...inp, minHeight: 160, resize: "vertical" }}
+            value={draft.body ?? ""}
+            onChange={e => setDraft({ ...draft, body: e.target.value })}
+          />
+        </Field>
+
+        <Field label="一覧に出す短い抜粋">
+          <textarea
+            style={{ ...inp, minHeight: 70, resize: "vertical" }}
             value={draft.excerpt ?? ""}
             onChange={e => setDraft({ ...draft, excerpt: e.target.value })}
+            placeholder="全角200字程度"
           />
+        </Field>
+
+        <Field label="扱い">
+          <select style={inp} value={draft.visibility ?? "private"} onChange={e => setDraft({ ...draft, visibility: e.target.value })}>
+            {VISIBILITIES.map(v => <option key={v.value} value={v.value}>{v.label}</option>)}
+          </select>
         </Field>
 
         <Field label="活用先（記事のURLやID・カンマ区切り）">
