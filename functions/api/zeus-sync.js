@@ -100,7 +100,6 @@ export async function onRequestPost(context) {
       { headers: JSON_HEADERS }
     );
   }
-
   let payload;
   try {
     payload = await request.json();
@@ -144,5 +143,69 @@ export async function onRequestPost(context) {
     );
   } catch (err) {
     return new Response(JSON.stringify({ ok: false, reason: err.message }), { headers: JSON_HEADERS });
+  }
+}
+
+/**
+ * GET /api/zeus-sync — ブラウザで開くだけで状況が分かる手動同期。
+ * 未同期のスワイプをまとめて送り直し、何件送れて何件失敗したかを表示する。
+ * 失敗している場合はその理由もそのまま出す（原因を探させないため）。
+ */
+export async function onRequestGet(context) {
+  const { request, env } = context;
+
+  const setup = {
+    ZEUS_EXTERNAL_SECRET: !!env.ZEUS_EXTERNAL_SECRET,
+    ZEUS_USER_ID:         !!env.ZEUS_USER_ID,
+    SUPABASE:             !!env.VITE_SUPABASE_URL && !!env.VITE_SUPABASE_ANON_KEY,
+  };
+  if (!setup.ZEUS_EXTERNAL_SECRET || !setup.ZEUS_USER_ID || !setup.SUPABASE) {
+    return new Response(
+      JSON.stringify({ ok: false, 設定: setup, 次にやること: "不足している環境変数を Cloudflare Pages に追加して Retry deployment" }, null, 2),
+      { headers: JSON_HEADERS }
+    );
+  }
+
+  const origin = new URL(request.url).origin;
+
+  try {
+    const [pendingRes, totalRes] = await Promise.all([
+      sb(env, `sw_swipes?zeus_synced=eq.false&select=*&order=created_at.asc&limit=${RETRY_BATCH_MAX}`),
+      sb(env, "sw_swipes?select=id"),
+    ]);
+
+    if (!pendingRes.ok) {
+      const text = await pendingRes.text().catch(() => "");
+      return new Response(JSON.stringify({ ok: false, reason: `Supabase: ${pendingRes.status} ${text.slice(0, 200)}` }, null, 2), { headers: JSON_HEADERS });
+    }
+
+    const pending = await pendingRes.json();
+    const total   = totalRes.ok ? (await totalRes.json()).length : null;
+
+    const results = [];
+    for (const row of pending) {
+      results.push(await syncOne(env, origin, row));
+    }
+
+    const failed = results.filter(r => r.status === "failed");
+
+    return new Response(
+      JSON.stringify(
+        {
+          ok:          failed.length === 0,
+          スワイプ総数: total,
+          未同期だった数: pending.length,
+          今回送れた数: results.filter(r => r.status === "pushed").length,
+          失敗した数:   failed.length,
+          失敗の理由:   failed.map(f => f.reason),
+          詳細:        results,
+        },
+        null,
+        2
+      ),
+      { headers: JSON_HEADERS }
+    );
+  } catch (err) {
+    return new Response(JSON.stringify({ ok: false, reason: err.message }, null, 2), { headers: JSON_HEADERS });
   }
 }
