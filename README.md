@@ -1,73 +1,79 @@
-# swipe-file（スワイプファイルアプリ）
+# swipe-mcp
 
-参考にしたい他者コンテンツを「URL・理由・タグ」の3点セットで貯め、AI が制作時に1発で参照できる状態を作るアプリ。
+スワイプファイル（お手本・見本データ）専用の MCP サーバー。Claude から `swipe__*` ツールで
+素材の登録・検索・参照ができる。
 
-- 要件：スワイプファイルアプリ 要件定義 v1.5（シアニン担当 S3 成果物・本書が唯一の正）
-- 基盤：shia2n-app-template ＋ shia2n-core（React + Vite + Supabase + Cloudflare Pages）
+- 要件：Notion「スワイプファイルアプリ 要件定義 v1.7」§F4
+  https://app.notion.com/p/3ab9c6c1c439817abee4ee95f6a8a906
+- 方式：**shia2n-mcp 本体とは完全に独立した Worker**（本体には追加しない・パス分割方式は使わない）
+- 接続範囲：シアニン担当プロジェクトのみ
+
+```
+Claude（シアニン担当プロジェクト）
+  ↓ MCP（OAuth / Bearer）
+swipe-mcp（このアプリ・Cloudflare Workers）
+  ↓ Supabase REST（service role）
+sw_swipes / sw_zeus_orphans
+```
 
 ---
 
-## 環境変数（Cloudflare Pages → Settings → Environment variables）
+## 提供するツール（7本）
 
-既存アプリからコピペできるもの：
-
-```
-VITE_SUPABASE_URL
-VITE_SUPABASE_ANON_KEY
-VITE_FIREBASE_API_KEY
-VITE_FIREBASE_AUTH_DOMAIN
-VITE_FIREBASE_PROJECT_ID
-VITE_FIREBASE_STORAGE_BUCKET
-VITE_FIREBASE_MESSAGING_SENDER_ID
-VITE_FIREBASE_APP_ID
-VITE_FIREBASE_DATABASE_ID
-ANTHROPIC_API_KEY
-```
-
-このアプリだけで新しく必要なもの：
-
-```
-ZEUS_EXTERNAL_SECRET   Zeus v2 外部API の合言葉（Zeus 側と同じ値）
-ZEUS_USER_ID           Zeus v2 側のユーザーID（索引の登録先）
-```
-
-Production / Preview の両方に設定する。
-
----
-
-## 診断ページ
-
-デプロイ後、`https://<アプリのURL>/diag` を開くと、環境変数・Supabase 接続・
-テーブル実在・Zeus 疎通・Claude 疎通を1画面で確認できる。
-生の JSON が欲しいときは `/diag?json=1`。
-
----
-
-## Supabase
-
-`sql/01_pre_check.sql`（事前確認）→ `sql/02_create_tables.sql`（作成）の順に
-Supabase SQL Editor で実行する。どちらも何回実行しても同じ結果になる。
-
-- `sw_swipes`：スワイプ本体（参照回数 `ref_count` / 最終参照日時 `last_referenced_at` を含む）
-- `sw_zeus_orphans`：削除済みスワイプの Zeus 索引ID（掃除待ち）
-- `sw_increment_ref(uuid)`：参照回数を1つ増やす関数（詳細画面表示・`swipe__get` から呼ぶ）
-
----
-
-## 画面
-
-| 画面 | 中身 |
-|---|---|
-| 一覧 | 検索・絞り込み（タグ／媒体／軸／状態）・並び替え（登録日順／参照が多い順）・活用済を隠すトグル |
-| 登録 | URL と理由の2項目 → AI補完 → 内容を確認して保存 |
-| 詳細 | 全項目の編集・活用済切替・削除。開いた時点で参照回数が1つ増える |
-
-## 実装ブロック
-
-| ブロック | 内容 | 状態 |
+| ツール | 参照回数 | 内容 |
 |---|---|---|
-| 1 | DB ＋ /diag | 完了 |
-| 2 | F1/F3/F6（UI基本） | 完了 |
-| 3 | F4（MCP・独立Worker） | 未着手 |
-| 4 | F5（Zeus索引連携） | 未着手 |
-| 5 | F2（一括取り込み） | 未着手 |
+| `swipe__add` | 増えない | 1件登録。`reason` 必須、`url` か `body` のいずれか必須 |
+| `swipe__bulk_add` | 増えない | 複数件まとめて登録（最大50件）。失敗した件だけ理由を返す |
+| `swipe__search` | **増えない** | 条件検索。既定は登録日降順、`sort=ref` のときだけ参照が多い順 |
+| `swipe__get` | **+1** | ID指定で1件フル取得（`body` 含む） |
+| `swipe__update` | 増えない | 部分更新。参照回数は更新できない |
+| `swipe__mark_used` | **増えない** | 活用済マーク＋活用先の記録 |
+| `swipe__list_tags` | 増えない | 使用中タグの一覧（表記ゆれ確認用） |
+
+ファイル投入用のツールは作らない。AI は投入時点で中身をテキストで読めているため、
+`swipe__add` の `body` に渡せば足りる（要件 §F4）。
+
+---
+
+## セットアップ
+
+### 1. GitHub リポジトリ
+`swipe-mcp` という名前で作成し、このファイル一式を Upload files で置く。
+
+### 2. KV 名前空間
+Cloudflare → Storage & Databases → KV → 名前空間 `swipe-mcp-oauth` を作成し、
+その ID を `wrangler.jsonc` の `kv_namespaces[0].id` に入れる。
+
+**shia2n-mcp と同じ名前空間を共用しないこと。**共用すると片方で発行した接続用トークンが
+もう片方でも通ってしまう。
+
+### 3. Cloudflare Workers（GitHub連携）
+Workers & Pages → Create → Workers → Import a repository → `swipe-mcp`
+
+- Build command : `npm install`
+- Deploy command: `npx wrangler deploy`
+- Root directory: （空欄）
+
+### 4. Secrets（Settings → Variables and Secrets）
+
+| 名前 | 値 |
+|---|---|
+| `MCP_SERVER_SECRET` | 新規のランダム文字列（64文字以上）。**shia2n-mcp とは別の値にする** |
+| `MCP_DEFAULT_USER_ID` | Naoki の Firebase UID（スワイプアプリと同じ値） |
+| `SUPABASE_URL` | 既存アプリと同じ |
+| `SUPABASE_SERVICE_ROLE_KEY` | 既存アプリと同じ |
+| `ANTHROPIC_API_KEY` | 既存アプリと同じ（AI補完用） |
+
+### 5. 動作確認
+- `https://swipe-mcp.<アカウント名>.workers.dev/` → 稼働状況の JSON
+- `https://swipe-mcp.<アカウント名>.workers.dev/diag` → Secrets と Supabase 接続の診断
+
+### 6. Claude への接続
+シアニン担当プロジェクトのコネクタとして `https://swipe-mcp.<アカウント名>.workers.dev/mcp` を追加する。
+
+---
+
+## まだ入っていないもの
+
+- **Zeus 索引への自動連携（F5）**：登録時の push は次のブロックで実装する
+- **ファイル取り込み（F7）**：画面アップロードのみの機能で、MCP 側には作らない
