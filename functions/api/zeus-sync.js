@@ -1,0 +1,148 @@
+/**
+ * POST /api/zeus-sync — スワイプを Zeus v2 の索引へ登録する
+ *
+ * 要件 v1.7 §F5。判断規則をこの1ファイルに集約し、画面側には持たせない。
+ *
+ *   body { id: "<スワイプID>" }  … 1件だけ同期する（登録直後に呼ぶ）
+ *   body { retry: true }        … 未同期のものをまとめて同期する（起動時・日次）
+ *
+ * リトライ規則（要件 §F5 の表そのまま）
+ *   zeus_item_id 空  / synced false → push する
+ *   zeus_item_id あり / synced false → push しない。フラグだけ直す（二重登録防止）
+ *   zeus_item_id あり / synced true  → 何もしない
+ *
+ * push に失敗しても 200 を返す。登録そのものを失敗させないため（§F5）。
+ */
+
+const ZEUS_PUSH_URL   = "https://zeus.shia2n.jp/api/external/push-to-zeus";
+const JSON_HEADERS    = { "Content-Type": "application/json; charset=utf-8" };
+const RETRY_BATCH_MAX = 20;
+
+function sb(env, path, init = {}) {
+  return fetch(`${env.VITE_SUPABASE_URL.replace(/\/+$/, "")}/rest/v1/${path}`, {
+    ...init,
+    headers: {
+      apikey:         env.VITE_SUPABASE_ANON_KEY,
+      Authorization:  `Bearer ${env.VITE_SUPABASE_ANON_KEY}`,
+      "Content-Type": "application/json",
+      ...(init.headers ?? {}),
+    },
+  });
+}
+
+/** 1件を Zeus へ登録し、結果を sw_swipes へ書き戻す */
+async function syncOne(env, origin, swipe) {
+  // すでに索引IDがある＝ push 済み。フラグだけ直して終わり（二重登録防止）
+  if (swipe.zeus_item_id) {
+    if (!swipe.zeus_synced) {
+      await sb(env, `sw_swipes?id=eq.${swipe.id}`, {
+        method: "PATCH",
+        body:   JSON.stringify({ zeus_synced: true }),
+      });
+    }
+    return { id: swipe.id, status: "already_pushed" };
+  }
+
+  // 索引3点（要件 §F5）：要約1行＝reason ／ タグ ／ 正本リンク＝詳細URL
+  const detailUrl = `${origin}/?id=${swipe.id}`;
+  const content   = [
+    swipe.reason,
+    (swipe.topic_tags ?? []).length ? `タグ：${(swipe.topic_tags ?? []).join(" / ")}` : null,
+    `スワイプファイルで開く：${detailUrl}`,
+  ].filter(Boolean).join("\n");
+
+  let res;
+  try {
+    res = await fetch(ZEUS_PUSH_URL, {
+      method:  "POST",
+      headers: {
+        Authorization:  `Bearer ${env.ZEUS_EXTERNAL_SECRET}`,
+        "Content-Type": "application/json",
+      },
+      body: JSON.stringify({
+        user_id:    env.ZEUS_USER_ID,
+        source_app: "swipe-file",
+        title:      swipe.title || swipe.reason,
+        content,
+        source_url: detailUrl,
+      }),
+    });
+  } catch (err) {
+    return { id: swipe.id, status: "failed", reason: err.message };
+  }
+
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    return { id: swipe.id, status: "failed", reason: `${res.status} ${text.slice(0, 120)}` };
+  }
+
+  const data   = await res.json().catch(() => ({}));
+  const itemId = data.item_id;
+  if (!itemId) {
+    return { id: swipe.id, status: "failed", reason: "Zeus から索引IDが返りませんでした" };
+  }
+
+  // 索引IDを先に保存してからフラグを立てる（途中で落ちても二重登録にならない順序）
+  await sb(env, `sw_swipes?id=eq.${swipe.id}`, {
+    method: "PATCH",
+    body:   JSON.stringify({ zeus_item_id: itemId, zeus_synced: true }),
+  });
+
+  return { id: swipe.id, status: "pushed", zeus_item_id: itemId };
+}
+
+export async function onRequestPost(context) {
+  const { request, env } = context;
+
+  if (!env.ZEUS_EXTERNAL_SECRET || !env.ZEUS_USER_ID) {
+    return new Response(
+      JSON.stringify({ ok: false, reason: "Zeus の設定が未完了です（/diag で確認してください）" }),
+      { headers: JSON_HEADERS }
+    );
+  }
+
+  let payload;
+  try {
+    payload = await request.json();
+  } catch {
+    return new Response(JSON.stringify({ ok: false, reason: "invalid json" }), { status: 400, headers: JSON_HEADERS });
+  }
+
+  const origin = new URL(request.url).origin;
+
+  try {
+    let query;
+    if (payload.retry) {
+      query = `sw_swipes?zeus_synced=eq.false&select=*&order=created_at.asc&limit=${RETRY_BATCH_MAX}`;
+    } else if (payload.id) {
+      query = `sw_swipes?id=eq.${encodeURIComponent(payload.id)}&select=*`;
+    } else {
+      return new Response(JSON.stringify({ ok: false, reason: "id または retry が必要です" }), { status: 400, headers: JSON_HEADERS });
+    }
+
+    const listRes = await sb(env, query);
+    if (!listRes.ok) {
+      const text = await listRes.text().catch(() => "");
+      return new Response(JSON.stringify({ ok: false, reason: `Supabase: ${listRes.status} ${text.slice(0, 120)}` }), { headers: JSON_HEADERS });
+    }
+
+    const rows    = await listRes.json();
+    const results = [];
+    for (const row of rows) {
+      results.push(await syncOne(env, origin, row));
+    }
+
+    return new Response(
+      JSON.stringify({
+        ok:      true,
+        target:  rows.length,
+        pushed:  results.filter(r => r.status === "pushed").length,
+        failed:  results.filter(r => r.status === "failed").length,
+        results,
+      }),
+      { headers: JSON_HEADERS }
+    );
+  } catch (err) {
+    return new Response(JSON.stringify({ ok: false, reason: err.message }), { headers: JSON_HEADERS });
+  }
+}

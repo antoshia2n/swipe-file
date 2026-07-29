@@ -2,6 +2,7 @@ import { useState } from "react";
 import { T, card, inp, solidBtn, ghostBtn } from "shia2n-core";
 import { Field, Notice, TagChips } from "../components/ui.jsx";
 import { enrichSwipe } from "../lib/enrich.js";
+import { syncOneToZeus } from "../lib/zeus.js";
 import {
   createSwipe, detectSourceType, validateSwipe,
   SOURCE_TYPES, CONTENT_AXES, VISIBILITIES, VIS_PRIVATE,
@@ -42,12 +43,14 @@ export default function SwipeForm({ uid, onSaved }) {
     setError("");
     setSaving(true);
     try {
-      await createSwipe(uid, {
+      const saved = await createSwipe(uid, {
         source_url: url.trim(),
         body:       body.trim(),
         reason:     reason.trim(),
         ...extra,
       });
+      // Zeus 索引への登録（失敗しても保存自体は成功させる。§F5）
+      syncOneToZeus(saved.id);
       setUrl(""); setBody(""); setReason("");
       setExtra(EMPTY_EXTRA); setNotes([]); setPhase("input");
       onSaved?.();

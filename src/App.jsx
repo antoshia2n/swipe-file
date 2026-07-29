@@ -1,15 +1,20 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { useAuthUid, T } from "shia2n-core";
 import { APP_NAME, TABS, TAB_LIST, TAB_REGISTER } from "./constants.js";
 import SwipeList from "./screens/SwipeList.jsx";
 import SwipeForm from "./screens/SwipeForm.jsx";
 import SwipeDetail from "./screens/SwipeDetail.jsx";
+import { retryPendingZeusSync } from "./lib/zeus.js";
 
 export default function App() {
   const uid = useAuthUid();
   const [tab, setTab]           = useState(TAB_LIST);
-  const [openId, setOpenId]     = useState(null);
+  // Zeus の正本リンク（?id=...）から開かれた場合は、その詳細を最初に表示する
+  const [openId, setOpenId]     = useState(() => new URLSearchParams(window.location.search).get("id"));
   const [reloadKey, setReload]  = useState(0);
+
+  // 起動時に、未同期のスワイプをまとめて Zeus へ送り直す（§F5）
+  useEffect(() => { retryPendingZeusSync(); }, []);
 
   const bumpReload = () => setReload(k => k + 1);
 
