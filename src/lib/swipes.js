@@ -1,5 +1,7 @@
 import { supabase } from "shia2n-core";
 import { removeFile } from "./files.js";
+import { deriveTitle } from "./titling.js";
+import { toJapanese } from "./errors.js";
 
 /* ── 選択肢（要件 v1.5 §4.1 の値をそのまま） ───────────────────────────── */
 
@@ -101,13 +103,13 @@ export async function listSwipes(uid, opts = {}) {
   }
 
   const { data, error } = await q.limit(limit);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(toJapanese(error, "一覧を読み込めませんでした"));
   return data ?? [];
 }
 
 export async function getSwipe(id) {
   const { data, error } = await supabase.from(TABLE).select("*").eq("id", id).single();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(toJapanese(error, "この素材を読み込めませんでした"));
   return data;
 }
 
@@ -122,6 +124,13 @@ export async function createSwipe(uid, fields) {
   const problem = validateSwipe({ reason, source_url: url, body, file_url: file }, { allowDraft: true });
   if (problem) throw new Error(problem);
 
+  // 見出しは1か所の規則で決める（src/lib/titling.js）。
+  // 呼び出し側が見出しを持っていればそれを使い、無ければここで作る。
+  const provided = (fields.title ?? "").trim();
+  const derived  = deriveTitle({ body, fileName: fields.file_name ?? "" });
+  const title      = provided || derived.title;
+  const title_auto = provided ? fields.title_auto === true : derived.auto;
+
   const row = {
     user_id:      uid,
     source_url:   url || null,
@@ -129,7 +138,8 @@ export async function createSwipe(uid, fields) {
     file_url:     file || null,
     reason,
     topic_tags:   fields.topic_tags ?? [],
-    title:        (fields.title ?? "").trim(),
+    title,
+    title_auto,
     source_type:  fields.source_type || detectSourceType(url, { hasBody: !!body }),
     author:       fields.author || null,
     excerpt:      fields.excerpt || null,
@@ -140,7 +150,7 @@ export async function createSwipe(uid, fields) {
     zeus_synced:  false,
   };
   const { data, error } = await supabase.from(TABLE).insert(row).select().single();
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(toJapanese(error, "保存できませんでした"));
   return data;
 }
 
@@ -163,7 +173,7 @@ export async function updateSwipe(id, changes) {
   }
 
   const { error } = await supabase.from(TABLE).update(safe).eq("id", id);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(toJapanese(error, "更新できませんでした"));
 }
 
 export async function markUsed(id, usedIn) {
@@ -174,19 +184,22 @@ export async function markUsed(id, usedIn) {
 
 export async function deleteSwipe(swipe) {
   if (swipe.zeus_item_id) {
+    // URL を持たない素材（本文・ファイルだけのもの）も退避できるようにしてある。
+    // 何の素材だったかを後から追えるよう、見出しも一緒に残す。
     const { error: saveError } = await supabase.from(ORPHANS).insert({
       user_id:      swipe.user_id,
       zeus_item_id: swipe.zeus_item_id,
-      source_url:   swipe.source_url,
+      source_url:   swipe.source_url ?? null,
+      title:        swipe.title ?? null,
     });
     // 退避に失敗したら削除を中止する。索引IDを取りこぼすと Zeus 側に
     // 消せない索引が永久に残るため（§F6）
     if (saveError) {
-      throw new Error(`索引IDの退避に失敗したため、削除を中止しました：${saveError.message}`);
+      throw new Error(`索引IDの退避に失敗したため、削除を中止しました。${toJapanese(saveError, "原因は不明です")}`);
     }
   }
   const { error } = await supabase.from(TABLE).delete().eq("id", swipe.id);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(toJapanese(error, "削除できませんでした"));
 
   // 原本ファイルも消す（§F6）。ここで失敗しても本体は削除済みなので中断しない
   if (swipe.file_url) await removeFile(swipe.file_url).catch(() => {});
@@ -196,7 +209,7 @@ export async function deleteSwipe(swipe) {
 
 export async function incrementRef(id) {
   const { data, error } = await supabase.rpc("sw_increment_ref", { p_id: id });
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(toJapanese(error, "参照回数を更新できませんでした"));
   return Array.isArray(data) ? data[0] : data;
 }
 
@@ -204,7 +217,7 @@ export async function incrementRef(id) {
 
 export async function listTags(uid) {
   const { data, error } = await supabase.from(TABLE).select("topic_tags").eq("user_id", uid);
-  if (error) throw new Error(error.message);
+  if (error) throw new Error(toJapanese(error, "タグを読み込めませんでした"));
   const counts = new Map();
   for (const row of data ?? []) {
     for (const tag of row.topic_tags ?? []) {

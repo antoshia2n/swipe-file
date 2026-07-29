@@ -10,7 +10,7 @@ import {
 } from "../lib/swipes.js";
 
 const EMPTY_EXTRA = {
-  title: "", topic_tags: [], source_type: "その他",
+  title: "", title_auto: true, topic_tags: [], source_type: "その他",
   author: "", excerpt: "", content_axis: "", visibility: VIS_PRIVATE,
 };
 
@@ -68,6 +68,7 @@ export default function SwipeForm({ uid, onSaved }) {
     // 2. 残りの項目を埋める
     const { values, notes: n } = await enrichSwipe({
       uid, url: url.trim(), body: bodyText, reason: reason.trim(),
+      fileName: file?.name ?? "",
     });
     if (fileType && fileType !== "その他") values.source_type = fileType;
 
@@ -84,6 +85,7 @@ export default function SwipeForm({ uid, onSaved }) {
         source_url: url.trim(),
         body:       body.trim(),
         file_url:   fileUrl,
+        file_name:  file?.name ?? "",
         reason:     reason.trim(),
         ...extra,
       });
@@ -190,7 +192,17 @@ export default function SwipeForm({ uid, onSaved }) {
           {notes.map((n, i) => <Notice key={i} kind="warn">{n}</Notice>)}
 
           <Field label="タイトル">
-            <input style={inp} value={extra.title} onChange={e => setExtra({ ...extra, title: e.target.value })} />
+            {/* 人が1文字でも直したら「自動で付けた見出し」ではなくなる（作り直しの対象から外れる） */}
+            <input
+              style={inp}
+              value={extra.title}
+              onChange={e => setExtra({ ...extra, title: e.target.value, title_auto: false })}
+            />
+            {extra.title_auto && (
+              <div style={{ fontSize: 10, color: T.faint, marginTop: 3 }}>
+                自動で付けた見出しです。直すとそのまま残ります
+              </div>
+            )}
           </Field>
 
           <Field label="タグ">

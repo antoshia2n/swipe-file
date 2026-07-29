@@ -56,6 +56,8 @@ export default function SwipeDetail({ id, onBack, onChanged }) {
         visibility:   draft.visibility,
         reason:       draft.reason,
         title:        draft.title,
+        // 人が見出しを直したら、以後は「自動で付けた見出し」の作り直し対象から外す
+        title_auto:   draft.title === row.title ? row.title_auto : false,
         topic_tags:   draft.topic_tags,
         source_type:  draft.source_type,
         author:       draft.author || null,
@@ -189,6 +191,11 @@ export default function SwipeDetail({ id, onBack, onChanged }) {
       <div style={{ ...card, padding: "14px 16px", marginBottom: 12 }}>
         <Field label="タイトル">
           <input style={inp} value={draft.title} onChange={e => setDraft({ ...draft, title: e.target.value })} />
+          {row.title_auto && (
+            <div style={{ fontSize: 10, color: T.faint, marginTop: 3 }}>
+              自動で付けた見出しです。ここで直すと、以後は作り直しの対象から外れます
+            </div>
+          )}
         </Field>
 
         <Field label="なぜ良いか・1行">

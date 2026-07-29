@@ -5,6 +5,8 @@ import {
   listSwipes, listTags, SOURCE_TYPES, CONTENT_AXES, STATUSES,
   SORT_CREATED, SORT_REF,
 } from "../lib/swipes.js";
+import { retitleAuto } from "../lib/retitle.js";
+import { isUnsetTitle } from "../lib/titling.js";
 
 export default function SwipeList({ uid, onOpen, reloadKey }) {
   const [keyword, setKeyword]         = useState("");
@@ -17,8 +19,10 @@ export default function SwipeList({ uid, onOpen, reloadKey }) {
 
   const [rows, setRows]       = useState([]);
   const [tags, setTags]       = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError]     = useState("");
+  const [loading, setLoading]     = useState(true);
+  const [error, setError]         = useState("");
+  const [retitling, setRetitling] = useState(false);
+  const [retitleNote, setNote]    = useState("");
 
   const load = useCallback(async () => {
     setLoading(true);
@@ -38,6 +42,28 @@ export default function SwipeList({ uid, onOpen, reloadKey }) {
   }, [uid, keyword, tag, sourceType, contentAxis, status, hideUsed, sort]);
 
   useEffect(() => { if (uid) load(); }, [uid, load, reloadKey]);
+
+  // 自動で付いた見出しを、今の規則で付け直す（人が直した見出しには触らない）
+  async function handleRetitle() {
+    setRetitling(true);
+    setError("");
+    setNote("");
+    try {
+      const { target, changed } = await retitleAuto(uid);
+      setNote(
+        target === 0
+          ? "自動で付いた見出しはありませんでした"
+          : `${target} 件を見直し、${changed} 件の見出しを作り直しました`
+      );
+      await load();
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setRetitling(false);
+    }
+  }
+
+  const autoCount = rows.filter(r => r.title_auto).length;
 
   return (
     <div>
@@ -79,9 +105,22 @@ export default function SwipeList({ uid, onOpen, reloadKey }) {
       </div>
 
       {error && <Notice kind="error">{error}</Notice>}
+      {retitleNote && <Notice kind="info">{retitleNote}</Notice>}
 
-      <div style={{ ...lb10, marginBottom: 8 }}>
-        {loading ? "読み込み中…" : `${rows.length} 件`}
+      <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 8 }}>
+        <div style={{ ...lb10 }}>
+          {loading ? "読み込み中…" : `${rows.length} 件`}
+          {!loading && autoCount > 0 && `（自動の見出し ${autoCount} 件）`}
+        </div>
+        {autoCount > 0 && (
+          <button
+            onClick={handleRetitle}
+            disabled={retitling}
+            style={{ ...ghostBtn, marginLeft: "auto", whiteSpace: "nowrap", fontSize: 11 }}
+          >
+            {retitling ? "作り直しています…" : "自動の見出しを作り直す"}
+          </button>
+        )}
       </div>
 
       {!loading && rows.length === 0 && (
@@ -98,6 +137,7 @@ export default function SwipeList({ uid, onOpen, reloadKey }) {
 /* カードは親の外側に定義する（技術鉄則 §4.2） */
 function SwipeCard({ row, onOpen }) {
   const isDraft = row.status === "reason未記入";
+  const unset   = isUnsetTitle(row.title);
   return (
     <div
       onClick={() => onOpen(row.id)}
@@ -110,8 +150,11 @@ function SwipeCard({ row, onOpen }) {
       }}
     >
       <div style={{ display: "flex", justifyContent: "space-between", gap: 8, alignItems: "flex-start" }}>
-        <div style={{ fontSize: 13, fontWeight: 700, lineHeight: 1.5, wordBreak: "break-word" }}>
-          {row.title || "（無題）"}
+        <div style={{
+          fontSize: 13, fontWeight: 700, lineHeight: 1.5, wordBreak: "break-word",
+          color: unset ? T.amber : T.text,
+        }}>
+          {unset ? "見出し未設定" : row.title}
         </div>
         <div style={{ display: "flex", gap: 4, flexShrink: 0 }}>
           <Badge text={row.status} color={statusColor(row.status)} />
@@ -130,6 +173,7 @@ function SwipeCard({ row, onOpen }) {
 
       <div style={{ display: "flex", gap: 5, flexWrap: "wrap", marginTop: 8, alignItems: "center" }}>
         <Badge text={row.source_type} />
+        {row.title_auto && !unset && <Badge text="見出し自動" />}
         {row.file_url && !row.body && <Badge text="解析失敗" color={T.red} />}
         {row.content_axis && <Badge text={row.content_axis} />}
         {(row.topic_tags ?? []).map(t => (

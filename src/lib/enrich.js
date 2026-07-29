@@ -1,4 +1,5 @@
 import { CONTENT_AXES, SOURCE_TYPES, detectSourceType, listTags } from "./swipes.js";
+import { deriveTitle, deriveExcerpt } from "./titling.js";
 
 const MODEL = "claude-haiku-4-5-20251001";
 const EXCERPT_MAX = 200; // 一覧カード用の短い抜粋（要件 v1.7 §4.1）
@@ -14,13 +15,19 @@ const EXCERPT_MAX = 200; // 一覧カード用の短い抜粋（要件 v1.7 §4.
  *
  * 例外は投げない。埋められた分だけ返し、埋まらなかった理由を notes で伝える。
  */
-export async function enrichSwipe({ uid, url = "", body = "", reason = "" }) {
+export async function enrichSwipe({ uid, url = "", body = "", reason = "", fileName = "" }) {
   const notes = [];
   const hasUrl  = url.trim().length > 0;
   const hasBody = body.trim().length > 0;
 
+  // 見出しの材料はいったん別々に持ち、最後に titling.js の規則で1つに決める
+  let pageTitle = "";
+  let aiTitle   = "";
+  let aiExcerpt = "";
+
   const values = {
     title:        "",
+    title_auto:   true,
     topic_tags:   [],
     source_type:  detectSourceType(url, { hasBody }),
     author:       "",
@@ -51,7 +58,7 @@ export async function enrichSwipe({ uid, url = "", body = "", reason = "" }) {
     }
 
     if (ogp?.fetched) {
-      if (ogp.title)  values.title  = ogp.title;
+      if (ogp.title)  pageTitle     = ogp.title;
       if (ogp.author) values.author = ogp.author;
     } else {
       notes.push("ページの情報を取得できませんでした（X などは非公開のため通常です）");
@@ -62,10 +69,10 @@ export async function enrichSwipe({ uid, url = "", body = "", reason = "" }) {
   try {
     const ai = await askClaude({ url, body, reason, ogp, existingTags });
     if (ai) {
-      if (ai.title && !values.title)              values.title        = ai.title;
+      if (ai.title)                               aiTitle             = ai.title;
       if (Array.isArray(ai.topic_tags))           values.topic_tags   = ai.topic_tags.slice(0, 5);
       if (ai.author && !values.author)            values.author       = ai.author;
-      if (ai.excerpt)                             values.excerpt      = String(ai.excerpt).slice(0, EXCERPT_MAX);
+      if (ai.excerpt)                             aiExcerpt           = String(ai.excerpt);
       if (CONTENT_AXES.includes(ai.content_axis)) values.content_axis = ai.content_axis;
       if (SOURCE_TYPES.includes(ai.source_type))  values.source_type  = ai.source_type;
     }
@@ -73,14 +80,22 @@ export async function enrichSwipe({ uid, url = "", body = "", reason = "" }) {
     notes.push(`AI 補完は使えませんでした（${err.message}）。手で埋めても保存できます`);
   }
 
-  // 4. 補完が効かなかったときの最低限の埋め合わせ
-  if (!values.excerpt) {
-    if (hasBody)                  values.excerpt = body.trim().slice(0, EXCERPT_MAX);
-    else if (ogp?.description)    values.excerpt = String(ogp.description).slice(0, EXCERPT_MAX);
-  }
-  if (!values.title) {
-    values.title = hasUrl ? url.trim() : (values.excerpt || "（無題）").slice(0, 40);
-  }
+  // 4. 見出しと抜粋を1か所の規則で決める（src/lib/titling.js）。
+  //    AI が使えない期間でも、ここで人が読める見出しになるようにする。
+  const titled = deriveTitle({
+    pageTitle,
+    aiTitle,
+    body:     body.trim(),
+    fileName,
+  });
+  values.title      = titled.title;
+  values.title_auto = titled.auto;
+
+  values.excerpt = deriveExcerpt({
+    aiExcerpt,
+    pageDescription: ogp?.description ?? "",
+    body:            body.trim(),
+  });
 
   return { values, notes };
 }
