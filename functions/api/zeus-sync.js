@@ -18,12 +18,16 @@ const ZEUS_PUSH_URL   = "https://zeus.shia2n.jp/api/external/push-to-zeus";
 const JSON_HEADERS    = { "Content-Type": "application/json; charset=utf-8" };
 const RETRY_BATCH_MAX = 20;
 
+// 2026-07-30 決定により、公開キーでは表に届かなくなった。
+// ここはサーバー側の処理なので、管理者キー（Cloudflare の設定にのみ存在）を使う。
 function sb(env, path, init = {}) {
-  return fetch(`${env.VITE_SUPABASE_URL.replace(/\/+$/, "")}/rest/v1/${path}`, {
+  const base = (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? "").replace(/\/+$/, "");
+  const key  = env.SUPABASE_SERVICE_ROLE_KEY;
+  return fetch(`${base}/rest/v1/${path}`, {
     ...init,
     headers: {
-      apikey:         env.VITE_SUPABASE_ANON_KEY,
-      Authorization:  `Bearer ${env.VITE_SUPABASE_ANON_KEY}`,
+      apikey:         key,
+      Authorization:  `Bearer ${key}`,
       "Content-Type": "application/json",
       ...(init.headers ?? {}),
     },
@@ -157,7 +161,7 @@ export async function onRequestGet(context) {
   const setup = {
     ZEUS_EXTERNAL_SECRET: !!env.ZEUS_EXTERNAL_SECRET,
     ZEUS_USER_ID:         !!env.ZEUS_USER_ID,
-    SUPABASE:             !!env.VITE_SUPABASE_URL && !!env.VITE_SUPABASE_ANON_KEY,
+    SUPABASE:             !!(env.SUPABASE_URL ?? env.VITE_SUPABASE_URL) && !!env.SUPABASE_SERVICE_ROLE_KEY,
   };
   if (!setup.ZEUS_EXTERNAL_SECRET || !setup.ZEUS_USER_ID || !setup.SUPABASE) {
     return new Response(

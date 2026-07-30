@@ -5,14 +5,21 @@
  * ブラウザで開くと HTML の一覧、`/diag?json=1` で生 JSON を返す。
  *
  * 検証対象：
- *   1. 環境変数（クライアント用9本 + サーバー用3本）
- *   2. Supabase 接続 + sw_swipes / sw_zeus_orphans の実在
- *   3. Zeus v2 外部API 疎通（合言葉と user_id を切り分けて判定）
- *   4. Claude API 疎通（claude.js プロキシと同じ経路・同じ鍵を検証）
+ *   1. 環境変数（クライアント用10本 + サーバー用4本）※値は出さない。有無だけ
+ *   2. データの出入り口（設定の有無・ログイン確認の準備）
+ *   3. Supabase 接続 + sw_swipes / sw_zeus_orphans の実在（管理者キーで確認）
+ *   4. 公開キーからの到達（閉じているのが正常）
+ *   5. Zeus v2 外部API 疎通（合言葉と user_id を切り分けて判定）
+ *   6. 原本ファイルの保存先・Claude API 疎通 … `?full=1` のときだけ実行
  *
- * 注意：Pages Functions からの自己参照 fetch は行わない（Zeus 側で同じ構成が
- *       問題化し撤去済みのため）。プロキシ経由ではなく上流を直接叩いて検証する。
+ * 注意：
+ *   - Pages Functions からの自己参照 fetch は行わない（Zeus 側で同じ構成が
+ *     問題化し撤去済みのため）。プロキシ経由ではなく上流を直接叩いて検証する。
+ *   - この画面はログインの外側にある。値そのものは一切表示しない。
+ *     外部へ書き込む・課金が発生する検査は既定で実行しない（`?full=1` のときだけ）。
  */
+
+import { checkDbGateway } from "shia2n-core/server/db-gateway.js";
 
 const ZEUS_EXTERNAL_BASE = "https://zeus.shia2n.jp/api/external";
 const CLAUDE_MODEL       = "claude-haiku-4-5-20251001";
@@ -20,6 +27,7 @@ const CLAUDE_MODEL       = "claude-haiku-4-5-20251001";
 const CLIENT_ENV_KEYS = [
   "VITE_SUPABASE_URL",
   "VITE_SUPABASE_ANON_KEY",
+  "VITE_DB_GATEWAY",
   "VITE_FIREBASE_API_KEY",
   "VITE_FIREBASE_AUTH_DOMAIN",
   "VITE_FIREBASE_PROJECT_ID",
@@ -30,10 +38,22 @@ const CLIENT_ENV_KEYS = [
 ];
 
 const SERVER_ENV_KEYS = [
+  "SUPABASE_SERVICE_ROLE_KEY",
   "ANTHROPIC_API_KEY",
   "ZEUS_EXTERNAL_SECRET",
   "ZEUS_USER_ID",
 ];
+
+/* ── 小物 ────────────────────────────────────────────────────────────────── */
+
+function supabaseBase(env) {
+  return (env.SUPABASE_URL ?? env.VITE_SUPABASE_URL ?? "").replace(/\/+$/, "");
+}
+
+function adminHeaders(env) {
+  const key = env.SUPABASE_SERVICE_ROLE_KEY;
+  return { apikey: key, Authorization: `Bearer ${key}` };
+}
 
 /* ── 個別チェック ───────────────────────────────────────────────────────── */
 
@@ -50,20 +70,22 @@ function checkEnv(env) {
   return rows;
 }
 
-async function checkSupabaseTable(env, table, columns) {
+async function checkGateway(env) {
+  const name   = "データの出入り口（サーバー経由の読み書き）";
+  const result = await checkDbGateway(env);
+  return { name, status: result.ok ? "ok" : "ng", detail: result.detail };
+}
+
+/** 表と列の実在を、管理者キーで確認する（公開キーを閉じた後もここは通る） */
+async function checkTableAsAdmin(env, table, columns) {
   const name = `Supabase テーブル ${table}`;
-  if (!env.VITE_SUPABASE_URL || !env.VITE_SUPABASE_ANON_KEY) {
+  const base = supabaseBase(env);
+  if (!base || !env.SUPABASE_SERVICE_ROLE_KEY) {
     return { name, status: "ng", detail: "Supabase の環境変数が未設定のため検証できません" };
   }
-  // 要件 v1.5 で追加された列まで指定して取得し、列の取りこぼしも同時に検出する
-  const url = `${env.VITE_SUPABASE_URL.replace(/\/+$/, "")}/rest/v1/${table}?select=${encodeURIComponent(columns)}&limit=1`;
+  const url = `${base}/rest/v1/${table}?select=${encodeURIComponent(columns)}&limit=1`;
   try {
-    const res = await fetch(url, {
-      headers: {
-        apikey:        env.VITE_SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${env.VITE_SUPABASE_ANON_KEY}`,
-      },
-    });
+    const res = await fetch(url, { headers: adminHeaders(env) });
     if (res.ok) {
       const rows = await res.json();
       return { name, status: "ok", detail: `接続成功・列も最新（サンプル取得 ${rows.length} 件）` };
@@ -76,7 +98,7 @@ async function checkSupabaseTable(env, table, columns) {
       return { name, status: "ng", detail: "テーブルが未作成です。sql/02_create_tables.sql を実行してください" };
     }
     if (res.status === 401 || res.status === 403) {
-      return { name, status: "ng", detail: "anon キーが不正、または RLS ポリシーが未作成です" };
+      return { name, status: "ng", detail: "SUPABASE_SERVICE_ROLE_KEY が不正です" };
     }
     return { name, status: "ng", detail: `${res.status} ${res.statusText} — ${text.slice(0, 160)}` };
   } catch (err) {
@@ -84,22 +106,51 @@ async function checkSupabaseTable(env, table, columns) {
   }
 }
 
+/** 公開キーで表に届かないことを確認する（届かないのが正常） */
+async function checkPublicKeyClosed(env, table) {
+  const name = `公開キーからの到達 ${table}（届かないのが正常）`;
+  const base = supabaseBase(env);
+  if (!base || !env.VITE_SUPABASE_ANON_KEY) {
+    return { name, status: "ng", detail: "Supabase の環境変数が未設定のため検証できません" };
+  }
+  const url = `${base}/rest/v1/${table}?select=id&limit=1`;
+  try {
+    const res = await fetch(url, {
+      headers: {
+        apikey:        env.VITE_SUPABASE_ANON_KEY,
+        Authorization: `Bearer ${env.VITE_SUPABASE_ANON_KEY}`,
+      },
+    });
+    if (res.status === 401 || res.status === 403 || res.status === 404) {
+      return { name, status: "ok", detail: "公開キーでは届きません（想定どおり閉じています）" };
+    }
+    if (res.ok) {
+      return {
+        name,
+        status: "ng",
+        detail: "まだ公開キーで読めます。sql/07b_revoke_and_verify.sql を実行してください",
+      };
+    }
+    const text = await res.text().catch(() => "");
+    return { name, status: "ng", detail: `判定できません：${res.status} ${text.slice(0, 140)}` };
+  } catch (err) {
+    return { name, status: "ng", detail: `接続できません：${err.message}` };
+  }
+}
+
 async function checkRefCounter(env) {
   const name = "参照回数の加算関数 sw_increment_ref";
-  if (!env.VITE_SUPABASE_URL || !env.VITE_SUPABASE_ANON_KEY) {
+  const base = supabaseBase(env);
+  if (!base || !env.SUPABASE_SERVICE_ROLE_KEY) {
     return { name, status: "ng", detail: "Supabase の環境変数が未設定のため検証できません" };
   }
   // 存在しないIDを渡すので、どのレコードも書き換わらない（安全な疎通確認）
-  const url = `${env.VITE_SUPABASE_URL.replace(/\/+$/, "")}/rest/v1/rpc/sw_increment_ref`;
+  const url = `${base}/rest/v1/rpc/sw_increment_ref`;
   try {
     const res = await fetch(url, {
       method:  "POST",
-      headers: {
-        apikey:         env.VITE_SUPABASE_ANON_KEY,
-        Authorization:  `Bearer ${env.VITE_SUPABASE_ANON_KEY}`,
-        "Content-Type": "application/json",
-      },
-      body: JSON.stringify({ p_id: "00000000-0000-0000-0000-000000000000" }),
+      headers: { ...adminHeaders(env), "Content-Type": "application/json" },
+      body:    JSON.stringify({ p_id: "00000000-0000-0000-0000-000000000000" }),
     });
     if (res.ok) {
       return { name, status: "ok", detail: "呼び出し可能（存在しないIDを渡したため何も書き換えていません）" };
@@ -145,10 +196,10 @@ async function checkZeus(env) {
 
 async function checkStorage(env) {
   const name = "原本ファイルの保存先（Storage）";
-  if (!env.VITE_SUPABASE_URL || !env.VITE_SUPABASE_ANON_KEY) {
+  const base = supabaseBase(env);
+  if (!base || !env.VITE_SUPABASE_ANON_KEY) {
     return { name, status: "ng", detail: "Supabase の環境変数が未設定のため検証できません" };
   }
-  const base = env.VITE_SUPABASE_URL.replace(/\/+$/, "");
   const path = `_diag/probe-${Date.now()}.txt`;
   const auth = {
     apikey:        env.VITE_SUPABASE_ANON_KEY,
@@ -209,8 +260,8 @@ async function checkClaude(env) {
 
 /* ── 出力 ───────────────────────────────────────────────────────────────── */
 
-const LABEL = { ok: "OK", ng: "要対応" };
-const COLOR = { ok: "#256E45", ng: "#B8302A" };
+const LABEL = { ok: "OK", ng: "要対応", skip: "未実行" };
+const COLOR = { ok: "#256E45", ng: "#B8302A", skip: "#7A7769" };
 
 function renderHtml(result) {
   const rows = result.checks.map(c => `
@@ -237,6 +288,7 @@ function renderHtml(result) {
   .sub{font-size:11px;color:#7A7769;margin-bottom:14px}
   .head{background:#FAFAF7;border:1px solid #E5E2D9;border-radius:10px;padding:14px 16px;margin-bottom:12px}
   .headline{font-size:14px;font-weight:700;color:${result.summary.ng === 0 ? "#256E45" : "#B8302A"}}
+  .note{font-size:11px;color:#7A7769;margin-top:6px}
   table{width:100%;border-collapse:collapse;background:#FAFAF7;border:1px solid #E5E2D9;border-radius:10px;overflow:hidden}
   td{padding:9px 11px;border-bottom:1px solid #E5E2D9;vertical-align:top}
   tr:last-child td{border-bottom:none}
@@ -247,7 +299,10 @@ function renderHtml(result) {
 </style></head><body><div class="wrap">
 <h1>スワイプファイル 診断</h1>
 <div class="sub">${escapeHtml(result.checked_at)}</div>
-<div class="head"><div class="headline">${headline}</div></div>
+<div class="head">
+  <div class="headline">${headline}</div>
+  <div class="note">ファイルの書き込み検査と Claude の疎通検査は、費用と書き込みが発生するため既定では実行しません。必要なときだけ末尾に <b>?full=1</b> を付けてください。</div>
+</div>
 <table>${rows}</table>
 </div></body></html>`;
 }
@@ -262,17 +317,38 @@ function escapeHtml(s) {
 
 export async function onRequestGet(context) {
   const { request, env } = context;
+  const params   = new URL(request.url).searchParams;
+  const wantFull = params.get("full") === "1";
 
-  const [swipes, orphans, refCounter, storage, zeus, claude] = await Promise.all([
-    checkSupabaseTable(env, "sw_swipes", "id,zeus_item_id,ref_count,last_referenced_at"),
-    checkSupabaseTable(env, "sw_zeus_orphans", "id,zeus_item_id,source_url"),
+  const [gateway, swipes, orphans, refCounter, closedSwipes, closedOrphans, zeus] = await Promise.all([
+    checkGateway(env),
+    checkTableAsAdmin(env, "sw_swipes", "id,zeus_item_id,ref_count,last_referenced_at"),
+    checkTableAsAdmin(env, "sw_zeus_orphans", "id,zeus_item_id,source_url"),
     checkRefCounter(env),
-    checkStorage(env),
+    checkPublicKeyClosed(env, "sw_swipes"),
+    checkPublicKeyClosed(env, "sw_zeus_orphans"),
     checkZeus(env),
-    checkClaude(env),
   ]);
 
-  const checks = [...checkEnv(env), swipes, orphans, refCounter, storage, zeus, claude];
+  const heavy = wantFull
+    ? await Promise.all([checkStorage(env), checkClaude(env)])
+    : [
+        { name: "原本ファイルの保存先（Storage）", status: "skip", detail: "?full=1 のときだけ実行します（書き込みが発生するため）" },
+        { name: "Claude API 疎通（claude.js プロキシと同経路）", status: "skip", detail: "?full=1 のときだけ実行します（費用が発生するため）" },
+      ];
+
+  const checks = [
+    ...checkEnv(env),
+    gateway,
+    swipes,
+    orphans,
+    refCounter,
+    closedSwipes,
+    closedOrphans,
+    zeus,
+    ...heavy,
+  ];
+
   const result = {
     app:        "swipe-file",
     checked_at: new Date().toISOString(),
@@ -280,12 +356,12 @@ export async function onRequestGet(context) {
       total: checks.length,
       ok:    checks.filter(c => c.status === "ok").length,
       ng:    checks.filter(c => c.status === "ng").length,
+      skip:  checks.filter(c => c.status === "skip").length,
     },
     checks,
   };
 
-  const wantJson = new URL(request.url).searchParams.get("json") === "1";
-  if (wantJson) {
+  if (params.get("json") === "1") {
     return new Response(JSON.stringify(result, null, 2), {
       headers: { "Content-Type": "application/json; charset=utf-8", "Cache-Control": "no-store" },
     });

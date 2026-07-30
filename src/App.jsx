@@ -4,6 +4,7 @@ import { APP_NAME, TABS, TAB_LIST, TAB_REGISTER } from "./constants.js";
 import SwipeList from "./screens/SwipeList.jsx";
 import Register from "./screens/Register.jsx";
 import SwipeDetail from "./screens/SwipeDetail.jsx";
+import SpeedCheck from "./screens/SpeedCheck.jsx";
 import { retryPendingZeusSync } from "./lib/zeus.js";
 
 export default function App() {
@@ -12,6 +13,8 @@ export default function App() {
   // Zeus の正本リンク（?id=...）から開かれた場合は、その詳細を最初に表示する
   const [openId, setOpenId]     = useState(() => new URLSearchParams(window.location.search).get("id"));
   const [reloadKey, setReload]  = useState(0);
+  // ?speed=1 のときだけ、速さと経路の確認画面を出す（通常の操作には出てこない）
+  const [speedMode]             = useState(() => new URLSearchParams(window.location.search).get("speed") === "1");
 
   // 起動時に、未同期のスワイプをまとめて Zeus へ送り直す（§F5）
   useEffect(() => { retryPendingZeusSync(); }, []);
@@ -32,7 +35,7 @@ export default function App() {
             <button
               key={t}
               onClick={() => goTab(t)}
-              style={{ background: tab === t && !openId ? T.text : "transparent", color: tab === t && !openId ? "#fff" : T.muted, border: "none", borderRadius: 6, padding: "5px 11px", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
+              style={{ background: tab === t && !openId && !speedMode ? T.text : "transparent", color: tab === t && !openId && !speedMode ? "#fff" : T.muted, border: "none", borderRadius: 6, padding: "5px 11px", fontSize: 11, fontWeight: 600, cursor: "pointer", fontFamily: "inherit" }}
             >
               {t}
             </button>
@@ -41,7 +44,9 @@ export default function App() {
       </div>
 
       <div style={{ padding: "14px 16px", maxWidth: 680, margin: "0 auto" }}>
-        {openId ? (
+        {speedMode ? (
+          <SpeedCheck uid={uid} />
+        ) : openId ? (
           <SwipeDetail
             id={openId}
             onBack={() => setOpenId(null)}
