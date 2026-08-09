@@ -15,5 +15,9 @@ export const onRequest = createDbGateway({
     sw_swipes:       { owner: "user_id" },
     sw_zeus_orphans: { owner: "user_id" },
   },
-  functions: ["sw_increment_ref"],
+  functions: {
+    // 参照回数の加算。送信内容の p_user_id を、サーバーで確定した本人の印で上書きする。
+    // 関数の側（sql/08_increment_ref_owner.sql）も、その印と一致する行だけを対象にしている。
+    sw_increment_ref: { owner: "p_user_id" },
+  },
 });
