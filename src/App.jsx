@@ -1,11 +1,10 @@
-import { useEffect, useState } from "react";
+import { useState } from "react";
 import { useAuthUid, T } from "shia2n-core";
 import { APP_NAME, TABS, TAB_LIST, TAB_REGISTER } from "./constants.js";
 import SwipeList from "./screens/SwipeList.jsx";
 import Register from "./screens/Register.jsx";
 import SwipeDetail from "./screens/SwipeDetail.jsx";
 import SpeedCheck from "./screens/SpeedCheck.jsx";
-import { retryPendingZeusSync } from "./lib/zeus.js";
 
 export default function App() {
   const uid = useAuthUid();
@@ -15,9 +14,6 @@ export default function App() {
   const [reloadKey, setReload]  = useState(0);
   // ?speed=1 のときだけ、速さと経路の確認画面を出す（通常の操作には出てこない）
   const [speedMode]             = useState(() => new URLSearchParams(window.location.search).get("speed") === "1");
-
-  // 起動時に、未同期のスワイプをまとめて Zeus へ送り直す（§F5）
-  useEffect(() => { retryPendingZeusSync(); }, []);
 
   const bumpReload = () => setReload(k => k + 1);
 
