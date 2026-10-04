@@ -3,7 +3,6 @@ import { T, card, inp, solidBtn, ghostBtn } from "shia2n-core";
 import { Field, Notice } from "../components/ui.jsx";
 import { enrichSwipe } from "../lib/enrich.js";
 import { createSwipe } from "../lib/swipes.js";
-import { syncOneToZeus } from "../lib/zeus.js";
 
 const MAX_LINES = 50;
 
@@ -58,7 +57,6 @@ export default function BulkImport({ uid, onDone }) {
           reason:     row.reason,
           ...values,
         });
-        syncOneToZeus(saved.id);
         collected.push({
           ok:    true,
           url:   row.url,
