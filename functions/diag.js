@@ -52,7 +52,7 @@ function supabaseBase(env) {
 
 function adminHeaders(env) {
   const key = env.SUPABASE_SERVICE_ROLE_KEY;
-  return { apikey: key, Authorization: `Bearer ${key}` };
+  return { apikey: key, ...(/^eyJ/.test(String(key || "")) ? { Authorization: `Bearer ${key}` } : {}) };
 }
 
 /* ── 個別チェック ───────────────────────────────────────────────────────── */
@@ -118,7 +118,7 @@ async function checkPublicKeyClosed(env, table) {
     const res = await fetch(url, {
       headers: {
         apikey:        env.VITE_SUPABASE_ANON_KEY,
-        Authorization: `Bearer ${env.VITE_SUPABASE_ANON_KEY}`,
+        ...(/^eyJ/.test(String(env.VITE_SUPABASE_ANON_KEY || "")) ? { Authorization: `Bearer ${env.VITE_SUPABASE_ANON_KEY}` } : {}),
       },
     });
     if (res.status === 401 || res.status === 403 || res.status === 404) {
@@ -203,7 +203,7 @@ async function checkStorage(env) {
   const path = `_diag/probe-${Date.now()}.txt`;
   const auth = {
     apikey:        env.VITE_SUPABASE_ANON_KEY,
-    Authorization: `Bearer ${env.VITE_SUPABASE_ANON_KEY}`,
+    ...(/^eyJ/.test(String(env.VITE_SUPABASE_ANON_KEY || "")) ? { Authorization: `Bearer ${env.VITE_SUPABASE_ANON_KEY}` } : {}),
   };
   try {
     // 実際に書いてみて、すぐ消す（残骸を作らない）
