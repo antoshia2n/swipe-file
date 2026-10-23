@@ -506,3 +506,25 @@ mark.hl{background:color-mix(in srgb,var(--accent) 28%,transparent);color:inheri
   .peek .aitag{padding:4px 8px}
   .dt-nav .num{display:none}
 }
+/* 画像と PDF を大きく見る・画像を囲んで印を付ける */
+.shotv{display:flex;flex-direction:column;gap:6px;width:100%;text-align:left;cursor:zoom-in}
+.shotv-clip{display:block;border:1px solid var(--shot-line);border-radius:10px;overflow:hidden;max-height:520px}
+.shotv-cap{font-size:11px;color:var(--faint)}
+.mk-wrap{position:relative;display:block}
+.mk-wrap img{display:block;width:100%;height:auto;user-select:none;-webkit-user-drag:none}
+.mk{position:absolute;border:2px solid var(--l-kata);background:color-mix(in srgb,var(--l-kata) 12%,transparent);border-radius:4px;pointer-events:none}
+.mk em{position:absolute;left:-2px;top:-20px;font-style:normal;font-size:10.5px;font-weight:700;background:var(--l-kata);color:#fff;border-radius:4px 4px 0 0;padding:1px 6px;white-space:nowrap}
+.mk.draft{border-style:dashed}
+.mkref{font-size:12.5px;font-weight:600;color:var(--accent-ink);flex:1;text-align:left}
+.pdfv{display:flex;flex-direction:column;gap:6px;align-items:flex-start}
+.pdfv iframe{width:100%;height:62vh;border:1px solid var(--shot-line);border-radius:10px;background:var(--shot-bg)}
+.lb{position:fixed;inset:0;z-index:70;background:var(--bg);display:flex;flex-direction:column;padding-top:env(safe-area-inset-top,0px)}
+.lb-bar{display:flex;align-items:center;gap:10px;flex-wrap:wrap;padding:8px max(16px,env(safe-area-inset-right,0px)) 8px max(16px,env(safe-area-inset-left,0px));background:var(--panel);border-bottom:1px solid var(--line)}
+.lb-t{font-size:13px;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;flex:1}
+.lb-z{margin-left:0}
+.lb-body{flex:1;overflow:auto;padding:16px}
+.lb-body .mk-wrap{margin:0 auto;max-width:none}
+.lb-body .mk-wrap img{width:100%}
+.lb-body.marking .mk-wrap{cursor:crosshair;touch-action:none}
+.lb-pdf{flex:1;width:100%;border:0;background:var(--shot-bg)}
+.lb-body .mk-wrap.real img{width:auto;max-width:none}
