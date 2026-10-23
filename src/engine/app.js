@@ -83,7 +83,7 @@ export function startApp(root) {
     loading: true, err: "",
     loc: remembered.loc || "all", table: remembered.table || null, view: remembered.view || "v1",
     q: "", f: {}, sel: new Set(), open: null, navOn: innerWidth > 860,
-    colPop: false, cellPop: null, fold: new Set(), dragCol: null, modal: null, add: null, delArm: false, bodyEdit: false, saving: 0,
+    colPop: false, cellPop: null, fold: new Set(), lb: null, dragCol: null, modal: null, add: null, delArm: false, bodyEdit: false, saving: 0,
   };
 
   root.innerHTML = `<div id="app">
@@ -329,7 +329,44 @@ export function startApp(root) {
   }
 
   /* ── くわしくの窓 ───────────────────────────────────── */
-  function hlBody(it) { let h = esc(it.body); it.hl.forEach(x => { const e = esc(x.t); if (e) h = h.split(e).join(`<mark class="hl" title="${esc(x.r)}">${e}</mark>`); }); return h; }
+  function hlBody(it) { let h = esc(it.body); it.hl.forEach(x => { if (!x.t) return; const e = esc(x.t); if (e) h = h.split(e).join(`<mark class="hl" title="${esc(x.r)}">${e}</mark>`); }); return h; }
+  /* ── 画像と PDF を大きく見る・画像を囲んで印を付ける ─────────── */
+  const isPdf = it => !!(it.file && /\.pdf($|[?#])/i.test(it.file.url));
+  const boxesHTML = it => it.hl.map((h, i) => h.box ? `<span class="mk" style="left:${h.box[0]}%;top:${h.box[1]}%;width:${h.box[2]}%;height:${h.box[3]}%"><em>${esc(h.r)}</em></span>` : "").join("");
+  const shotView = it => `<button class="shotv" data-lbopen="img" aria-label="画像を大きく見る"><span class="shotv-clip"><span class="mk-wrap"><img src="${esc(it.shot)}" alt="" referrerpolicy="no-referrer">${boxesHTML(it)}</span></span><span class="shotv-cap">押すと大きく見られる・囲んで印を付けられる</span></button>`;
+  function lbHTML() {
+    const it = cur(); if (!S.lb || !it) return "";
+    const L = S.lb;
+    if (L.kind === "pdf") return `<div class="lb" role="dialog" aria-label="PDF を大きく見る"><div class="lb-bar"><b class="lb-t">${esc(it.file?.name || it.title)}</b><a class="ghost" href="${esc(it.file.url)}" target="_blank" rel="noopener">別のタブで開く</a><button class="icon" id="lbClose" aria-label="閉じる（Esc）">${IC.close}</button></div><iframe class="lb-pdf" src="${esc(it.file.url)}#view=FitH" title="PDF"></iframe></div>`;
+    const w = L.zoom === "fit" ? "width:100%" : L.zoom === "real" ? "width:max-content" : `width:${L.zoom}%`;
+    return `<div class="lb" role="dialog" aria-label="画像を大きく見る"><div class="lb-bar">
+        <div class="seg lb-z">${[["fit", "幅に合わせる"], [150, "150%"], [200, "200%"], ["real", "原寸"]].map(([z, l]) => `<button class="${String(L.zoom) === String(z) ? "on" : ""}" data-lbz="${z}">${l}</button>`).join("")}</div>
+        <label class="aitag ${L.mark ? "on" : ""}"><input type="checkbox" id="lbMark" ${L.mark ? "checked" : ""}>囲んで印を付ける</label>
+        ${L.mark ? `<select class="lsel mini" id="lbRef" aria-label="印の参考ポイント">${labelList("ref").map(r => `<option ${r === L.ref ? "selected" : ""}>${esc(r)}</option>`).join("")}</select>` : ""}
+        <span class="lsub">${L.mark ? "画像の上をなぞって囲む" : ""}</span>
+        <button class="icon" id="lbClose" aria-label="閉じる（Esc）" style="margin-left:auto">${IC.close}</button></div>
+      <div class="lb-body ${L.mark ? "marking" : ""}"><span class="mk-wrap ${L.zoom === "real" ? "real" : ""}" id="lbWrap" style="${w}"><img src="${esc(it.shot)}" alt="" referrerpolicy="no-referrer" draggable="false">${boxesHTML(it)}<span class="mk draft" id="lbDraft" hidden></span></span></div></div>`;
+  }
+  // 囲む操作（マウスも指も同じ）。位置は画像に対する割合で持つので、拡大しても印がずれない
+  let drag = null;
+  screen.addEventListener("pointerdown", e => {
+    const wrap = e.target.closest?.("#lbWrap"); if (!wrap || !S.lb?.mark) return;
+    e.preventDefault(); const r = wrap.getBoundingClientRect();
+    drag = { r, x: (e.clientX - r.left) / r.width * 100, y: (e.clientY - r.top) / r.height * 100 };
+    wrap.setPointerCapture?.(e.pointerId);
+  });
+  screen.addEventListener("pointermove", e => {
+    if (!drag) return; const d = document.getElementById("lbDraft"); if (!d) return;
+    const x = (e.clientX - drag.r.left) / drag.r.width * 100, y = (e.clientY - drag.r.top) / drag.r.height * 100;
+    const b = [Math.min(drag.x, x), Math.min(drag.y, y), Math.abs(x - drag.x), Math.abs(y - drag.y)].map(v => Math.max(0, Math.min(100, v)));
+    Object.assign(d.style, { left: b[0] + "%", top: b[1] + "%", width: b[2] + "%", height: b[3] + "%" }); d.hidden = false; drag.box = b;
+  });
+  screen.addEventListener("pointerup", () => {
+    if (!drag) return; const b = drag.box; drag = null;
+    if (!b || b[2] < 1 || b[3] < 1) { const d = document.getElementById("lbDraft"); if (d) d.hidden = true; return; }
+    const it = cur(); it.hl.push({ box: b.map(v => Math.round(v * 10) / 10), r: S.lb.ref }); changed(it, 0); render(); toast("印を付けました");
+  });
+
   function detailHTML() {
     const it = cur(); if (!it) return "";
     const list = filtered(), idx = list.findIndex(x => x.id === it.id);
@@ -371,10 +408,11 @@ export function startApp(root) {
      ${meta ? `<div class="dt-meta">${meta}</div>` : ""}
      <div class="dt-body dt-cols">
       <section class="dt-src">
-        ${it.shot ? shotHTML(it, true) : ""}${it.file ? `<a class="filelink" href="${esc(it.file.url)}" target="_blank" rel="noopener">${IC.file}${esc(it.file.name || "ファイルを開く")}${it.file.pages ? `（${esc(it.file.pages)} ページ）` : ""}</a>` : ""}
+        ${it.shot ? shotView(it) : ""}${isPdf(it) ? `<div class="pdfv"><iframe src="${esc(it.file.url)}#view=FitH" title="PDF" loading="lazy"></iframe><button class="ghost" data-lbopen="pdf">大きく開く</button></div>` : ""}${it.file ? `<a class="filelink" href="${esc(it.file.url)}" target="_blank" rel="noopener">${IC.file}${esc(it.file.name || "ファイルを開く")}${it.file.pages ? `（${esc(it.file.pages)} ページ）` : ""}</a>` : ""}
         ${it.body ? `<div><div class="dt-h">本文<span>なぞって線を引ける</span></div><div class="dt-v" id="bodyText" style="white-space:pre-wrap">${hlBody(it)}</div>
           <div class="hlbar"><select class="lsel" id="hlRef" aria-label="線の参考ポイント">${labelList("ref").map(r => `<option>${esc(r)}</option>`).join("")}</select><button class="ghost" id="hlAdd">なぞったところに線を引く</button></div>
-          ${it.hl.length ? `<div class="hls">${it.hl.map((h, i) => `<div class="hli"><span class="chip" style="--c:var(--l-kata)">${esc(h.r)}</span><q>${esc(h.t)}</q><button data-hlrm="${i}" aria-label="線を消す">${IC.x}</button></div>`).join("")}</div>` : ""}</div>` : ""}
+</div>` : ""}
+        ${it.hl.length ? `<div class="hls">${it.hl.map((h, i) => `<div class="hli"><span class="chip" style="--c:var(--l-kata)">${esc(h.r)}</span>${h.box ? `<button class="mkref" data-lbopen="img">画像の印</button>` : `<q>${esc(h.t)}</q>`}<button data-hlrm="${i}" aria-label="線を消す">${IC.x}</button></div>`).join("")}</div>` : ""}
         ${!it.body ? `<div><div class="dt-h">本文<span>「元の情報を直す」から入れられる</span></div><div class="dt-v">${it.excerpt ? esc(it.excerpt) : '<span class="num">本文はまだありません</span>'}</div></div>` : ""}
       </section>
       <section class="dt-an">
@@ -416,8 +454,8 @@ export function startApp(root) {
     if (S.loc.startsWith("f:") && !CFG.tables.some(t => t.folder === S.loc.slice(2))) body = subfoldersHTML(S.loc.slice(2));
     else body = listHTML();
     // 描き直しても、見ていた位置（縦・表の横）と、くわしくの窓の位置を保つ
-    const keep = ["#main", ".tw", ".dt-body"].map(sel => { const el = screen.querySelector(sel); return el ? [sel, el.scrollTop, el.scrollLeft] : null; }).filter(Boolean);
-    screen.innerHTML = navHTML() + `<main class="main" id="main">${body}</main>` + (S.open ? detailHTML() : "") + (S.modal === "add" ? addHTML() : "") + cellPopHTML();
+    const keep = ["#main", ".tw", ".dt-body", ".lb-body"].map(sel => { const el = screen.querySelector(sel); return el ? [sel, el.scrollTop, el.scrollLeft] : null; }).filter(Boolean);
+    screen.innerHTML = navHTML() + `<main class="main" id="main">${body}</main>` + (S.open ? detailHTML() : "") + (S.modal === "add" ? addHTML() : "") + cellPopHTML() + lbHTML();
     keep.forEach(([sel, t, l]) => { const el = screen.querySelector(sel); if (el) { el.scrollTop = t; el.scrollLeft = l; } });
     placeCellPop();
     remember();
@@ -428,7 +466,7 @@ export function startApp(root) {
   function stepOpen(d) {
     const list = filtered(), i = list.findIndex(x => x.id === S.open), next = list[i + d];
     if (!next) return;
-    S.open = next.id; S.delArm = false; S.cellPop = null; render();
+    S.open = next.id; S.delArm = false; S.cellPop = null; S.lb = null; render();
     const body = screen.querySelector(".dt-body"); if (body) body.scrollTop = 0;
   }
   const changed = (it, wait) => queueSave(it, wait);
@@ -509,10 +547,13 @@ export function startApp(root) {
     if (q("#colBtn")) { S.colPop = !S.colPop; render(); return; }
     if (b = q("[data-colmv]")) { const [k, d] = b.dataset.colmv.split(":"); const i = CFG.cols.indexOf(k), j = i + +d; if (j >= 0 && j < CFG.cols.length) [CFG.cols[i], CFG.cols[j]] = [CFG.cols[j], CFG.cols[i]]; saveCfg(); render(); return; }
     if (q("#fClear")) { S.f = {}; S.q = ""; render(); return; }
+    if (b = q("[data-lbopen]")) { S.lb = { kind: b.dataset.lbopen, zoom: "fit", mark: false, ref: S.lb?.ref || labelList("ref")[0] }; render(); return; }
+    if (q("#lbClose")) { S.lb = null; render(); return; }
+    if (b = q("[data-lbz]")) { S.lb.zoom = b.dataset.lbz; render(); return; }
     if (b = q("[data-step]")) { stepOpen(+b.dataset.step); return; }
     if (b = q("[data-open]")) { S.open = b.dataset.open; S.delArm = false; S.bodyEdit = false; render(); return; }
     if (q("#navBtn")) { S.navOn = !S.navOn; render(); return; }
-    if (t.id === "scrim" || q("#dtClose")) { S.open = null; render(); return; }
+    if (t.id === "scrim" || q("#dtClose")) { S.open = null; S.lb = null; render(); return; }
     if (b = q("[data-newlabel]")) {
       const key = b.dataset.newlabel; const v = prompt(`${LABEL_KEYS[key]}に足す値`); if (!v || !v.trim()) return;
       CFG.labels[key] = uniq([...(CFG.labels[key] || []), v.trim()]); saveCfg();
@@ -562,6 +603,8 @@ export function startApp(root) {
     if (t.dataset.colshow) { const k = t.dataset.colshow; CFG.cols = t.checked ? [...CFG.cols, k] : CFG.cols.filter(x => x !== k); saveCfg(); render(); return; }
     if (t.id === "moveTo") { const it = cur(); it.table = t.value || null; changed(it, 0); render(); toast(`「${pathOf(it.table).join(" / ")}」へ移しました`); return; }
     if (t.id === "bulkMove" && t.value) { let n = 0; ITEMS.forEach(it => { if (S.sel.has(it.id)) { it.table = t.value; changed(it, 0); n++; } }); S.sel.clear(); render(); toast(`${n} 件を「${pathOf(t.value).join(" / ")}」へ移しました`); return; }
+    if (t.id === "lbMark") { S.lb.mark = t.checked; render(); return; }
+    if (t.id === "lbRef") { S.lb.ref = t.value; return; }
     if (t.id === "aiAsk") { const it = cur(); it.ai = t.checked; changed(it, 0); render(); return; }
     if (t.id === "adTable") { S.add.table = t.value; return; }
     if (t.id === "adFile" && t.files[0]) { setAddFile(t.files[0]); return; }
@@ -609,10 +652,11 @@ export function startApp(root) {
   const onPaste = e => { if (S.modal !== "add") return; const f = [...(e.clipboardData?.files || [])].find(x => x.type.startsWith("image/") || x.type === "application/pdf"); if (f) { e.preventDefault(); setAddFile(f); } };
   const onKey = e => {
     const typing = /^(INPUT|TEXTAREA|SELECT)$/.test(document.activeElement?.tagName || "");
-    if (S.open && !S.modal && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
+    if (S.open && !S.modal && !S.lb && !typing && !e.metaKey && !e.ctrlKey && !e.altKey) {
       if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); stepOpen(1); return; }
       if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); stepOpen(-1); return; }
     }
+    if (e.key === "Escape" && S.lb) { S.lb = null; render(); return; }
     if (e.key === "Escape") { if (S.modal && !S.add?.busy) { S.modal = null; S.add = null; render(); } else if (S.cellPop) { S.cellPop = null; render(); } else if (S.colPop) { S.colPop = false; render(); } else if (S.open) { S.open = null; render(); } } };
   screen.addEventListener("scroll", () => placeCellPop(), true);
   // 畳んだ欄の開け閉めを覚える（描き直しても開いたまま）
