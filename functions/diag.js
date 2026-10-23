@@ -5,7 +5,7 @@
  * 検証対象：
  *   1. 環境変数（値は出さない。有無だけ）
  *   2. データの出入り口
- *   3. sw_swipes（スワイプくんの列まで）と sw_settings の実在（管理者キーで確認）
+ *   3. sw_swipes（スワイプくんの列まで）・sw_settings・sw_packs・sw_shares の実在（管理者キーで確認）
  *   4. 公開キーからの到達（表も置き場も、届かない・書けないのが正常）
  *
  * この画面はログインの外側にある。値そのものは一切表示しない。
@@ -237,7 +237,7 @@ export async function onRequestGet(context) {
   const { request, env } = context;
   const params   = new URL(request.url).searchParams;
 
-  const [gateway, swipes, settings, refCounter, closedSwipes, closedSettings, storageClosed] = await Promise.all([
+  const [gateway, swipes, settings, refCounter, closedSwipes, closedSettings, storageClosed, packs, shares, closedPacks, closedShares] = await Promise.all([
     checkGateway(env),
     checkTableAsAdmin(env, "sw_swipes", "id,table_id,shu,refs,grade,genres,labels,an_hypo,an_idea,ai_ask,ref_count"),
     checkTableAsAdmin(env, "sw_settings", "user_id,data"),
@@ -245,6 +245,11 @@ export async function onRequestGet(context) {
     checkPublicKeyClosed(env, "sw_swipes"),
     checkPublicKeyClosed(env, "sw_settings"),
     checkStorageClosed(env),
+    // 3便目（作業 27）：素材パックと共有ページ
+    checkTableAsAdmin(env, "sw_packs", "id,user_id,table_id,name,make,goal,items"),
+    checkTableAsAdmin(env, "sw_shares", "id,user_id,table_id,token,name,intro,items,show_hypo,show_idea,show_file,live,expire_at,cta,cta_text,cta_btn,cta_url,opens,last_opened_at"),
+    checkPublicKeyClosed(env, "sw_packs"),
+    checkPublicKeyClosed(env, "sw_shares"),
   ]);
 
   const checks = [
@@ -256,6 +261,10 @@ export async function onRequestGet(context) {
     closedSwipes,
     closedSettings,
     storageClosed,
+    packs,
+    shares,
+    closedPacks,
+    closedShares,
   ];
 
   const result = {
