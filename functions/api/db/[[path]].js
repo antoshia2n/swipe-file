@@ -12,12 +12,11 @@ import { createDbGateway } from "shia2n-core/server/db-gateway.js";
 export const onRequest = createDbGateway({
   basePath: "/api/db",
   tables: {
-    sw_swipes:       { owner: "user_id" },
-    sw_zeus_orphans: { owner: "user_id" },
+    sw_swipes:   { owner: "user_id" },
+    sw_settings: { owner: "user_id" },  // フォルダ・表・ビュー・列・ラベルの値（1 人 1 行）
   },
   functions: {
     // 参照回数の加算。送信内容の p_user_id を、サーバーで確定した本人の印で上書きする。
-    // 関数の側（sql/08_increment_ref_owner.sql）も、その印と一致する行だけを対象にしている。
     sw_increment_ref: { owner: "p_user_id" },
   },
 });

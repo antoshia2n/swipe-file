@@ -1,28 +1,17 @@
 /**
- * GET /diag  — スワイプファイルアプリ 自己診断エンドポイント
- *
- * 要件定義 v1.4 §7「診断」／デバッグ鉄則（Naoki は URL を1つ開くだけ）準拠。
+ * GET /diag  — スワイプくん 自己診断（Naoki は URL を 1 つ開くだけ）
  * ブラウザで開くと HTML の一覧、`/diag?json=1` で生 JSON を返す。
  *
  * 検証対象：
- *   1. 環境変数（クライアント用10本 + サーバー用4本）※値は出さない。有無だけ
- *   2. データの出入り口（設定の有無・ログイン確認の準備）
- *   3. Supabase 接続 + sw_swipes / sw_zeus_orphans の実在（管理者キーで確認）
- *   4. 公開キーからの到達（閉じているのが正常）
- *   5. Zeus v2 外部API 疎通（合言葉と user_id を切り分けて判定）
- *   6. 原本ファイルの保存先・Claude API 疎通 … `?full=1` のときだけ実行
+ *   1. 環境変数（値は出さない。有無だけ）
+ *   2. データの出入り口
+ *   3. sw_swipes（スワイプくんの列まで）と sw_settings の実在（管理者キーで確認）
+ *   4. 公開キーからの到達（表も置き場も、届かない・書けないのが正常）
  *
- * 注意：
- *   - Pages Functions からの自己参照 fetch は行わない（Zeus 側で同じ構成が
- *     問題化し撤去済みのため）。プロキシ経由ではなく上流を直接叩いて検証する。
- *   - この画面はログインの外側にある。値そのものは一切表示しない。
- *     外部へ書き込む・課金が発生する検査は既定で実行しない（`?full=1` のときだけ）。
+ * この画面はログインの外側にある。値そのものは一切表示しない。
  */
 
 import { checkDbGateway } from "shia2n-core/server/db-gateway.js";
-
-const ZEUS_EXTERNAL_BASE = "https://zeus.shia2n.jp/api/external";
-const CLAUDE_MODEL       = "claude-haiku-4-5-20251001";
 
 const CLIENT_ENV_KEYS = [
   "VITE_SUPABASE_URL",
@@ -39,9 +28,6 @@ const CLIENT_ENV_KEYS = [
 
 const SERVER_ENV_KEYS = [
   "SUPABASE_SERVICE_ROLE_KEY",
-  "ANTHROPIC_API_KEY",
-  "ZEUS_EXTERNAL_SECRET",
-  "ZEUS_USER_ID",
 ];
 
 /* ── 小物 ────────────────────────────────────────────────────────────────── */
@@ -165,94 +151,27 @@ async function checkRefCounter(env) {
   }
 }
 
-async function checkZeus(env) {
-  const name = "Zeus v2 外部API 疎通";
-  if (!env.ZEUS_EXTERNAL_SECRET) {
-    return { name, status: "ng", detail: "ZEUS_EXTERNAL_SECRET が未設定です" };
-  }
-  const userId = env.ZEUS_USER_ID || "";
-  const url    = `${ZEUS_EXTERNAL_BASE}/list-projects?user_id=${encodeURIComponent(userId)}`;
-  try {
-    const res = await fetch(url, {
-      headers: { Authorization: `Bearer ${env.ZEUS_EXTERNAL_SECRET}` },
-    });
-    if (res.status === 401) {
-      return { name, status: "ng", detail: "合言葉（ZEUS_EXTERNAL_SECRET）が Zeus 側と一致していません" };
-    }
-    if (res.status === 400) {
-      return { name, status: "ng", detail: "合言葉は一致。ZEUS_USER_ID が未設定か不正です" };
-    }
-    if (!res.ok) {
-      const text = await res.text().catch(() => "");
-      return { name, status: "ng", detail: `${res.status} ${res.statusText} — ${text.slice(0, 160)}` };
-    }
-    const data  = await res.json();
-    const count = Array.isArray(data.items) ? data.items.length : 0;
-    return { name, status: "ok", detail: `疎通成功（Zeus プロジェクト ${count} 件を取得）` };
-  } catch (err) {
-    return { name, status: "ng", detail: `接続できません：${err.message}` };
-  }
-}
-
-async function checkStorage(env) {
-  const name = "原本ファイルの保存先（Storage）";
+async function checkStorageClosed(env) {
+  const name = "ファイルの置き場 swipe-files に公開キーで書けない（書けないのが正常）";
   const base = supabaseBase(env);
   if (!base || !env.VITE_SUPABASE_ANON_KEY) {
     return { name, status: "ng", detail: "Supabase の環境変数が未設定のため検証できません" };
   }
   const path = `_diag/probe-${Date.now()}.txt`;
-  const auth = {
-    apikey:        env.VITE_SUPABASE_ANON_KEY,
+  const anon = {
+    apikey: env.VITE_SUPABASE_ANON_KEY,
     ...(/^eyJ/.test(String(env.VITE_SUPABASE_ANON_KEY || "")) ? { Authorization: `Bearer ${env.VITE_SUPABASE_ANON_KEY}` } : {}),
   };
   try {
-    // 実際に書いてみて、すぐ消す（残骸を作らない）
     const put = await fetch(`${base}/storage/v1/object/swipe-files/${path}`, {
-      method:  "POST",
-      headers: { ...auth, "Content-Type": "text/plain" },
-      body:    "diag",
+      method: "POST", headers: { ...anon, "Content-Type": "text/plain" }, body: "diag",
     });
-    if (!put.ok) {
-      const text = await put.text().catch(() => "");
-      if (put.status === 404 || /not found|bucket/i.test(text)) {
-        return { name, status: "ng", detail: "保存先が未作成です。sql/04_storage.sql を実行してください" };
-      }
-      return { name, status: "ng", detail: `書き込めません：${put.status} ${text.slice(0, 140)}` };
+    if (put.ok) {
+      // 書けてしまった：残骸を消してから知らせる
+      await fetch(`${base}/storage/v1/object/swipe-files/${path}`, { method: "DELETE", headers: adminHeaders(env) }).catch(() => {});
+      return { name, status: "ng", detail: "公開キーで書き込めました。作業 25 の手順 5（決まりを外す）が済んでいません" };
     }
-    await fetch(`${base}/storage/v1/object/swipe-files/${path}`, { method: "DELETE", headers: auth });
-    return { name, status: "ok", detail: "書き込みと削除を確認（テスト用ファイルは残していません）" };
-  } catch (err) {
-    return { name, status: "ng", detail: `接続できません：${err.message}` };
-  }
-}
-
-async function checkClaude(env) {
-  const name = "Claude API 疎通（claude.js プロキシと同経路）";
-  if (!env.ANTHROPIC_API_KEY) {
-    return { name, status: "ng", detail: "ANTHROPIC_API_KEY が未設定です" };
-  }
-  try {
-    const res = await fetch("https://api.anthropic.com/v1/messages", {
-      method:  "POST",
-      headers: {
-        "Content-Type":      "application/json",
-        "x-api-key":         env.ANTHROPIC_API_KEY,
-        "anthropic-version": "2023-06-01",
-      },
-      body: JSON.stringify({
-        model:      CLAUDE_MODEL,
-        max_tokens: 8,
-        messages:   [{ role: "user", content: "ping" }],
-      }),
-    });
-    if (res.ok) {
-      return { name, status: "ok", detail: `疎通成功（モデル ${CLAUDE_MODEL}）` };
-    }
-    const text = await res.text().catch(() => "");
-    if (res.status === 401) {
-      return { name, status: "ng", detail: "ANTHROPIC_API_KEY が無効です" };
-    }
-    return { name, status: "ng", detail: `${res.status} ${res.statusText} — ${text.slice(0, 160)}` };
+    return { name, status: "ok", detail: `公開キーの書き込みは断られた（${put.status}）` };
   } catch (err) {
     return { name, status: "ng", detail: `接続できません：${err.message}` };
   }
@@ -279,7 +198,7 @@ function renderHtml(result) {
 <html lang="ja"><head>
 <meta charset="UTF-8"/>
 <meta name="viewport" content="width=device-width, initial-scale=1.0"/>
-<title>スワイプファイル 診断</title>
+<title>スワイプくん 診断</title>
 <style>
   *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
   body{font-family:'Noto Sans JP','Hiragino Sans',sans-serif;background:#F0EEE7;color:#1C1B18;font-size:13px;padding:16px}
@@ -297,11 +216,10 @@ function renderHtml(result) {
   .dt{color:#7A7769;font-size:11px}
   @media(max-width:520px){td{display:block;border-bottom:none;padding:3px 12px}tr{display:block;border-bottom:1px solid #E5E2D9;padding:8px 0}}
 </style></head><body><div class="wrap">
-<h1>スワイプファイル 診断</h1>
+<h1>スワイプくん 診断</h1>
 <div class="sub">${escapeHtml(result.checked_at)}</div>
 <div class="head">
   <div class="headline">${headline}</div>
-  <div class="note">ファイルの書き込み検査と Claude の疎通検査は、費用と書き込みが発生するため既定では実行しません。必要なときだけ末尾に <b>?full=1</b> を付けてください。</div>
 </div>
 <table>${rows}</table>
 </div></body></html>`;
@@ -318,35 +236,26 @@ function escapeHtml(s) {
 export async function onRequestGet(context) {
   const { request, env } = context;
   const params   = new URL(request.url).searchParams;
-  const wantFull = params.get("full") === "1";
 
-  const [gateway, swipes, orphans, refCounter, closedSwipes, closedOrphans, zeus] = await Promise.all([
+  const [gateway, swipes, settings, refCounter, closedSwipes, closedSettings, storageClosed] = await Promise.all([
     checkGateway(env),
-    checkTableAsAdmin(env, "sw_swipes", "id,zeus_item_id,ref_count,last_referenced_at"),
-    checkTableAsAdmin(env, "sw_zeus_orphans", "id,zeus_item_id,source_url"),
+    checkTableAsAdmin(env, "sw_swipes", "id,table_id,shu,refs,grade,genres,labels,an_hypo,an_idea,ai_ask,ref_count"),
+    checkTableAsAdmin(env, "sw_settings", "user_id,data"),
     checkRefCounter(env),
     checkPublicKeyClosed(env, "sw_swipes"),
-    checkPublicKeyClosed(env, "sw_zeus_orphans"),
-    checkZeus(env),
+    checkPublicKeyClosed(env, "sw_settings"),
+    checkStorageClosed(env),
   ]);
-
-  const heavy = wantFull
-    ? await Promise.all([checkStorage(env), checkClaude(env)])
-    : [
-        { name: "原本ファイルの保存先（Storage）", status: "skip", detail: "?full=1 のときだけ実行します（書き込みが発生するため）" },
-        { name: "Claude API 疎通（claude.js プロキシと同経路）", status: "skip", detail: "?full=1 のときだけ実行します（費用が発生するため）" },
-      ];
 
   const checks = [
     ...checkEnv(env),
     gateway,
     swipes,
-    orphans,
+    settings,
     refCounter,
     closedSwipes,
-    closedOrphans,
-    zeus,
-    ...heavy,
+    closedSettings,
+    storageClosed,
   ];
 
   const result = {
