@@ -41,7 +41,7 @@ export async function onRequestPost({ request, env }) {
   const kept = [], target = [];
   for (const { u, p } of pairs) {
     const v = encodeURIComponent(`"${u}"`); // 住所の : / . を値として読ませるため " で囲む
-    const q = `or=(file_url.eq.${v},screenshot_url.eq.${v},props->>shot.eq.${v})`;
+    const q = `or=(file_url.eq.${v},props->>shot.eq.${v})`;
     const r = await fetch(`${base}/rest/v1/sw_swipes?select=id&limit=1&${q}`, { headers: admin });
     const rows = r.ok ? await r.json() : [{ id: "?" }]; // 確かめられないときは消さない
     (rows.length ? kept : target).push(rows.length ? u : p);
