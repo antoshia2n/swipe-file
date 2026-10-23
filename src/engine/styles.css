@@ -528,3 +528,9 @@ mark.hl{background:color-mix(in srgb,var(--accent) 28%,transparent);color:inheri
 .lb-body.marking .mk-wrap{cursor:crosshair;touch-action:none}
 .lb-pdf{flex:1;width:100%;border:0;background:var(--shot-bg)}
 .lb-body .mk-wrap.real img{width:auto;max-width:none}
+/* 全面表示で書きながら見る */
+.lb-main{flex:1;min-height:0;display:flex}
+.lb-main .lb-body,.lb-main .lb-pdf{flex:1;min-width:0}
+.lb-side{width:min(400px,40%);flex:none;overflow:auto;background:var(--panel);border-left:1px solid var(--line);padding:16px max(16px,env(safe-area-inset-right,0px)) 24px 16px;display:flex;flex-direction:column;gap:12px}
+.lb-side .dt-ta{min-height:96px}
+@media (max-width:900px){.lb-main{flex-direction:column}.lb-side{width:auto;max-height:45%;border-left:0;border-top:1px solid var(--line);padding-left:max(16px,env(safe-area-inset-left,0px))}}
