@@ -99,7 +99,7 @@ async function checkPublicKeyClosed(env, table) {
   if (!base || !env.VITE_SUPABASE_ANON_KEY) {
     return { name, status: "ng", detail: "Supabase の環境変数が未設定のため検証できません" };
   }
-  const url = `${base}/rest/v1/${table}?select=id&limit=1`;
+  const url = `${base}/rest/v1/${table}?select=*&limit=1`; // 表ごとに列が違うので * で聞く（sw_settings には id が無い）
   try {
     const res = await fetch(url, {
       headers: {
