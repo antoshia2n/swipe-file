@@ -693,6 +693,9 @@ export function startApp(root) {
       if (dirty) saveCfg();
       if (S.table && !tableOf(S.table)) S.table = null;
       if (!CFG.views.some(v => v.id === S.view)) S.view = CFG.views[0].id;
+      // パネルの「さっき保存したもの」から ?open=ID で開かれたら、その 1 件を開く
+      const openId = new URLSearchParams(location.search).get("open");
+      if (openId && ITEMS.some(x => x.id === openId)) { S.open = openId; history.replaceState(null, "", location.pathname); }
     } catch (e) { S.err = e.message || "読み込めませんでした"; }
     S.loading = false; render();
   }
