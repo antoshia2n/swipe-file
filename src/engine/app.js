@@ -82,7 +82,7 @@ export function startApp(root) {
     loading: true, err: "",
     loc: remembered.loc || "all", table: remembered.table || null, view: remembered.view || "v1",
     q: "", f: {}, sel: new Set(), open: null, navOn: innerWidth > 860,
-    colPop: false, dragCol: null, modal: null, add: null, delArm: false, bodyEdit: false, saving: 0,
+    colPop: false, cellPop: null, dragCol: null, modal: null, add: null, delArm: false, bodyEdit: false, saving: 0,
   };
 
   root.innerHTML = `<div id="app">
@@ -240,16 +240,36 @@ export function startApp(root) {
       ${all.map(k => { const on = CFG.cols.includes(k); return `<div class="cp-r"><label><input type="checkbox" data-colshow="${k}" ${on ? "checked" : ""}>${esc(COLS[k])}</label>
         ${on ? `<button data-colmv="${k}:-1" aria-label="上へ">${IC.up}</button><button data-colmv="${k}:1" aria-label="下へ">${IC.down}</button>` : ""}</div>`; }).join("")}</div>`;
   }
+  /* 表のセルをその場で直す（Notion のように押すと選べる窓が出る） */
+  const FIELD_OF = { shu: "shu", ref: "ref", genre: "genre", tag: "tags" };
+  const cellPick = (it, key, inner) => `<button class="cellpick ${S.cellPop && S.cellPop.id === it.id && S.cellPop.key === key ? "on" : ""}" data-cp="${key}" data-id="${it.id}" aria-label="${LABEL_KEYS[key]}を直す">${inner}</button>`;
+  function cellPopHTML() {
+    const P = S.cellPop; if (!P) return "";
+    const it = ITEMS.find(x => x.id === P.id); if (!it) return "";
+    const field = FIELD_OF[P.key];
+    const has = v => P.key === "shu" ? it.shu === v : it[field].includes(v);
+    return `<div class="cpop" id="cpop" role="dialog" aria-label="${LABEL_KEYS[P.key]}"><div class="cp-h">${LABEL_KEYS[P.key]}${P.key === "shu" ? "（1 つ選ぶ）" : "（いくつでも）"}</div>
+      <div class="pick">${labelList(P.key).map(v => `<button class="pk ${has(v) ? "on" : ""}" data-cpv="${esc(v)}">${esc(v)}</button>`).join("")}<button class="pk" data-newlabel="${P.key}" data-for="${it.id}" title="選べる値を足す">＋</button></div></div>`;
+  }
+  function placeCellPop() {
+    const pop = document.getElementById("cpop"); if (!pop || !S.cellPop) return;
+    const btn = screen.querySelector(`[data-cp="${S.cellPop.key}"][data-id="${S.cellPop.id}"]`);
+    if (!btn) { pop.remove(); return; }
+    const r = btn.getBoundingClientRect(), w = pop.offsetWidth, h = pop.offsetHeight;
+    const left = Math.max(8, Math.min(r.left, innerWidth - w - 8));
+    const top = r.bottom + 6 + h > innerHeight - 8 ? Math.max(8, r.top - h - 6) : r.bottom + 6;
+    pop.style.left = left + "px"; pop.style.top = top + "px";
+  }
   function cellHTML(k, it) {
     switch (k) {
       case "grade": return gradeHTML(it);
-      case "shu": return it.shu ? `<span class="chip" style="--c:var(--k-doc)">${esc(it.shu)}</span>` : '<span class="num">―</span>';
-      case "ref": return chipsHTML(it.ref, "var(--l-kata)");
-      case "genre": return chipsHTML(it.genre, "var(--l-yoto)");
+      case "shu": return cellPick(it, "shu", it.shu ? `<span class="chip" style="--c:var(--k-doc)">${esc(it.shu)}</span>` : '<span class="num">―</span>');
+      case "ref": return cellPick(it, "ref", chipsHTML(it.ref, "var(--l-kata)"));
+      case "genre": return cellPick(it, "genre", chipsHTML(it.genre, "var(--l-yoto)"));
       case "stage": return stageHTML(it);
       case "place": return `<span class="num">${esc(pathOf(it.table).join(" / "))}</span>`;
       case "metric": return `<span class="num">${esc(metricOf(it))}</span>`;
-      case "tags": return chipsHTML(it.tags, "var(--faint)", 1);
+      case "tags": return cellPick(it, "tag", chipsHTML(it.tags, "var(--faint)", 1));
       case "saved": return `<span class="num">${esc(it.saved)}</span>`;
       case "used": return `<span class="num">${it.used.length ? it.used.length + " 回" : "―"}</span>`;
       default: return "";
@@ -377,7 +397,11 @@ export function startApp(root) {
     let body;
     if (S.loc.startsWith("f:") && !CFG.tables.some(t => t.folder === S.loc.slice(2))) body = subfoldersHTML(S.loc.slice(2));
     else body = listHTML();
-    screen.innerHTML = navHTML() + `<main class="main" id="main">${body}</main>` + (S.open ? detailHTML() : "") + (S.modal === "add" ? addHTML() : "");
+    // 描き直しても、見ていた位置（縦・表の横）と、くわしくの窓の位置を保つ
+    const keep = ["#main", ".tw", ".dt-body"].map(sel => { const el = screen.querySelector(sel); return el ? [sel, el.scrollTop, el.scrollLeft] : null; }).filter(Boolean);
+    screen.innerHTML = navHTML() + `<main class="main" id="main">${body}</main>` + (S.open ? detailHTML() : "") + (S.modal === "add" ? addHTML() : "") + cellPopHTML();
+    keep.forEach(([sel, t, l]) => { const el = screen.querySelector(sel); if (el) { el.scrollTop = t; el.scrollLeft = l; } });
+    placeCellPop();
     remember();
   }
   function keepFocus(id, fn) { const el = document.getElementById(id); const pos = el ? el.selectionStart : 0; fn(); const n = document.getElementById(id); if (n) { n.focus(); try { n.setSelectionRange(pos, pos); } catch { /* 選べない欄 */ } } }
@@ -423,6 +447,17 @@ export function startApp(root) {
     if (q("#addBtn")) { openAdd(); return; }
     if (!screen.contains(t)) return;
     let closed = false; if (!q(".colbtn") && S.colPop) { S.colPop = false; closed = true; }
+    if (b = q("[data-cpv]")) {
+      const P = S.cellPop, it = ITEMS.find(x => x.id === P.id), v = b.dataset.cpv;
+      if (P.key === "shu") { it.shu = it.shu === v ? "" : v; S.cellPop = null; }
+      else { const f = FIELD_OF[P.key]; it[f] = toggle(it[f], v); }
+      changed(it, 300); render(); return;
+    }
+    if (b = q("[data-cp]")) {
+      const same = S.cellPop && S.cellPop.id === b.dataset.id && S.cellPop.key === b.dataset.cp;
+      S.cellPop = same ? null : { id: b.dataset.id, key: b.dataset.cp }; render(); return;
+    }
+    if (S.cellPop && !q("#cpop")) { S.cellPop = null; closed = true; }
     if (!q("#delItem") && S.delArm) { S.delArm = false; closed = true; }
     if (b = q("[data-loc]")) { S.loc = b.dataset.loc; S.sel.clear(); S.open = null; S.f = {}; if (S.loc.startsWith("f:") || S.loc === "all") S.view = CFG.views[0].id; if (innerWidth <= 860) S.navOn = false; render(); return; }
     if (b = q("[data-table]")) { if (S.table === b.dataset.table) return; S.table = b.dataset.table; S.sel.clear(); render(); return; }
@@ -455,7 +490,7 @@ export function startApp(root) {
     if (b = q("[data-newlabel]")) {
       const key = b.dataset.newlabel; const v = prompt(`${LABEL_KEYS[key]}に足す値`); if (!v || !v.trim()) return;
       CFG.labels[key] = uniq([...(CFG.labels[key] || []), v.trim()]); saveCfg();
-      const it = cur(); if (it) { if (key === "shu") it.shu = v.trim(); else { const field = key === "tag" ? "tags" : key; it[field] = uniq([...it[field], v.trim()]); } changed(it, 0); }
+      const it = b.dataset.for ? ITEMS.find(x => x.id === b.dataset.for) : cur(); if (it) { if (key === "shu") it.shu = v.trim(); else { const field = key === "tag" ? "tags" : key; it[field] = uniq([...it[field], v.trim()]); } changed(it, 0); }
       render(); return;
     }
     if (b = q("[data-pk]")) { const it = cur(); it[b.dataset.pk] = toggle(it[b.dataset.pk], b.dataset.v); changed(it, 300); render(); return; }
@@ -546,7 +581,9 @@ export function startApp(root) {
   });
   screen.addEventListener("dragend", () => { S.dragCol = null; screen.querySelectorAll("th.over").forEach(x => x.classList.remove("over")); });
   const onPaste = e => { if (S.modal !== "add") return; const f = [...(e.clipboardData?.files || [])].find(x => x.type.startsWith("image/") || x.type === "application/pdf"); if (f) { e.preventDefault(); setAddFile(f); } };
-  const onKey = e => { if (e.key === "Escape") { if (S.modal && !S.add?.busy) { S.modal = null; S.add = null; render(); } else if (S.colPop) { S.colPop = false; render(); } else if (S.open) { S.open = null; render(); } } };
+  const onKey = e => { if (e.key === "Escape") { if (S.modal && !S.add?.busy) { S.modal = null; S.add = null; render(); } else if (S.cellPop) { S.cellPop = null; render(); } else if (S.colPop) { S.colPop = false; render(); } else if (S.open) { S.open = null; render(); } } };
+  screen.addEventListener("scroll", () => placeCellPop(), true);
+  addEventListener("resize", () => placeCellPop());
   document.addEventListener("paste", onPaste);
   document.addEventListener("keydown", onKey);
 

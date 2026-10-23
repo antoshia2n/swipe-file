@@ -56,6 +56,23 @@ function fileNameOf(url) {
   try { return decodeURIComponent(new URL(url).pathname.split("/").pop() || ""); } catch { return ""; }
 }
 
+/**
+ * X のリンク先の情報から、投稿者・アカウント・ポストの本文を取り出す。
+ * 題名は「名前 (@id) on X」か「名前 on X: "本文" / X」の形で来る。
+ */
+export function fromXCard(og, url = "") {
+  const out = { author: "", handle: "", text: "" };
+  const m = /x\.com\/([A-Za-z0-9_]+)\/status/i.exec(url) || /twitter\.com\/([A-Za-z0-9_]+)\/status/i.exec(url);
+  if (m) out.handle = "@" + m[1];
+  if (!og) return out;
+  const title = String(og.title || "").trim();
+  let r;
+  if ((r = /^(.*?)\s*\(@([A-Za-z0-9_]+)\)\s+on (X|Twitter)$/.exec(title))) out.author = r[1];
+  else if ((r = /^(.*?) on (X|Twitter): [“"](.*)[”"]\s*\/\s*(X|Twitter)$/s.exec(title))) { out.author = r[1]; out.text = r[3]; }
+  if (!out.text) out.text = String(og.description || "").trim();
+  return out;
+}
+
 /* ── 1 行 ⇄ 1 件 ─────────────────────────────────────── */
 export function toItem(r) {
   const p = r.props && typeof r.props === "object" ? r.props : {};
@@ -183,9 +200,14 @@ export async function createItem(f) {
   const body = (f.body || "").trim();
   const isPdf = f.file?.kind === "pdf";
   const src = detectSourceType(url, { hasBody: !!body, isPdf });
-  const og = f.ogp || null;
-  const t = deriveTitle({ manualTitle: f.title || "", pageTitle: og?.title || "", body, fileName: f.file?.name || "" });
+  let og = f.ogp || null;
+  // X の題名は「名前 (@id) on X」でポストの中身ではない。本文は説明文の側に入っているので、そちらを使う
+  const x = src === "X" ? fromXCard(og, url) : null;
+  if (x) og = { ...og, title: "", description: "", author: x.author || og?.author };
+  const text = body || x?.text || "";
+  const t = deriveTitle({ manualTitle: f.title || "", pageTitle: og?.title || "", body: text, fileName: f.file?.name || "" });
   const props = {};
+  if (x?.handle) props.handle = x.handle;
   if (f.file?.kind === "img") props.shot = f.file.url;
   if (isPdf) props.file_name = f.file.name;
   if (og?.image) props.ogImage = og.image;
@@ -193,11 +215,11 @@ export async function createItem(f) {
     source_url: url || null,
     title: t.title,
     title_auto: t.auto,
-    body: body || null,
+    body: text || null,
     reason: (f.why || "").trim(),
     source_type: src,
     author: og?.author || null,
-    excerpt: deriveExcerpt({ pageDescription: og?.description || "", body }) || null,
+    excerpt: deriveExcerpt({ pageDescription: og?.description || "", body: text }) || null,
     status: "未活用",
     visibility: "private",
     table_id: f.table || null,

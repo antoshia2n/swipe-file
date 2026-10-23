@@ -462,3 +462,9 @@ mark.hl{background:color-mix(in srgb,var(--accent) 28%,transparent);color:inheri
 .drop.has span{flex:1;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
 .drop .lnk{display:inline;font-size:inherit;color:var(--accent-ink);text-decoration:underline}
 .ink[disabled]{opacity:.5;cursor:default}
+/* 表のセルをその場で直す */
+.cellpick{display:block;width:100%;min-height:28px;text-align:left;border-radius:7px;padding:3px 4px;margin:-3px -4px;border:1px solid transparent}
+.cellpick:hover{background:var(--soft);border-color:var(--line)}
+.cellpick.on{border-color:var(--accent);background:var(--accent-bg)}
+.cpop{position:fixed;z-index:40;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:10px;width:280px;max-width:calc(100vw - 16px)}
+.cpop .cp-h{font-size:11px;font-weight:700;color:var(--faint);padding:0 2px 8px}
