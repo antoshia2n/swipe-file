@@ -232,3 +232,55 @@ export async function createItem(f) {
   const data = await run(supabase.from(TABLE).insert(row).select().single(), "保存できませんでした");
   return toItem(data);
 }
+
+/* ── 素材パックと共有ページ（3便目） ───────────────────────── */
+export const PACKS_TABLE = "sw_packs";
+export const SHARES_TABLE = "sw_shares";
+// 表がまだ無い（作業 27 の前）ときは、画面を止めずに空のまま出す
+const missingTable = e => /does not exist|relation .* not exist|Could not find the table|42P01|PGRST205/i.test(String(e?.message || e?.code || ""));
+
+export const toPack = r => ({
+  id: r.id, table: r.table_id || null, name: r.name || "", make: r.make || "", goal: r.goal || "",
+  items: Array.isArray(r.items) ? r.items.filter(x => typeof x === "string") : [],
+  upd: shortDate(r.updated_at || r.created_at), updated: r.updated_at,
+});
+const packPatch = p => ({ table_id: p.table || null, name: (p.name || "").trim() || "名前のない素材パック", make: p.make || "", goal: p.goal || "", items: p.items, updated_at: new Date().toISOString() });
+
+export const toShare = r => ({
+  id: r.id, table: r.table_id || null, token: r.token, name: r.name || "", intro: r.intro || "",
+  items: (Array.isArray(r.items) ? r.items : []).filter(x => x && typeof x.id === "string").map(x => ({ id: x.id, c: x.c || "" })),
+  showHypo: !!r.show_hypo, showIdea: !!r.show_idea, showFile: !!r.show_file,
+  live: r.live !== false, expire: r.expire_at || "",
+  cta: r.cta !== false, ctaText: r.cta_text || "", ctaBtn: r.cta_btn || "", ctaUrl: r.cta_url || "",
+  opens: r.opens || 0, last: r.last_opened_at ? shortDate(r.last_opened_at) : "",
+  upd: shortDate(r.updated_at || r.created_at), updated: r.updated_at,
+});
+const sharePatch = s => ({
+  table_id: s.table || null, name: (s.name || "").trim() || "名前のない共有ページ", intro: s.intro || "", items: s.items,
+  show_hypo: !!s.showHypo, show_idea: !!s.showIdea, show_file: !!s.showFile,
+  live: !!s.live, expire_at: s.expire || null,
+  cta: !!s.cta, cta_text: s.ctaText || "", cta_btn: s.ctaBtn || "", cta_url: (s.ctaUrl || "").trim(),
+  updated_at: new Date().toISOString(),
+});
+
+async function loadOr(table, map, label) {
+  const { data, error } = await supabase.from(table).select("*").order("updated_at", { ascending: false }).limit(2000);
+  if (error) { if (missingTable(error)) return { rows: [], missing: true }; throw new Error(toJapanese(error, `${label}を読み込めませんでした`)); }
+  return { rows: (data ?? []).map(map), missing: false };
+}
+export const loadPacks = () => loadOr(PACKS_TABLE, toPack, "素材パック");
+export const loadShares = () => loadOr(SHARES_TABLE, toShare, "共有ページ");
+
+export async function createPack(f) {
+  const row = { table_id: f.table || null, name: f.name || "新しい素材パック", make: f.make || "", goal: f.goal || "", items: f.items || [] };
+  return toPack(await run(supabase.from(PACKS_TABLE).insert(row).select().single(), "素材パックを作れませんでした"));
+}
+export const savePack = p => run(supabase.from(PACKS_TABLE).update(packPatch(p)).eq("id", p.id).select("id"), "素材パックを保存できませんでした");
+export const deletePack = id => run(supabase.from(PACKS_TABLE).delete().eq("id", id).select("id"), "素材パックを消せませんでした");
+
+export async function createShare(f) {
+  const row = { table_id: f.table || null, name: f.name || "新しい共有ページ", items: f.items || [] };
+  return toShare(await run(supabase.from(SHARES_TABLE).insert(row).select().single(), "共有ページを作れませんでした"));
+}
+export const saveShare = s => run(supabase.from(SHARES_TABLE).update(sharePatch(s)).eq("id", s.id).select("id"), "共有ページを保存できませんでした");
+export const deleteShare = id => run(supabase.from(SHARES_TABLE).delete().eq("id", id).select("id"), "共有ページを消せませんでした");

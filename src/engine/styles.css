@@ -548,3 +548,23 @@ mark.hl{background:color-mix(in srgb,var(--accent) 28%,transparent);color:inheri
 .pn .xs-n{font-weight:700;font-size:13px}
 .pn .xs-u{font-size:11.5px;color:var(--faint)}
 .pn .dest select{max-width:230px}
+
+/* ---------- 3便目：素材パックと共有ページ ---------- */
+[hidden]{display:none !important}
+.tabs{display:inline-flex;background:var(--soft);border:1px solid var(--line);border-radius:9px;padding:2px;gap:2px}
+.tab{font-size:12.5px;font-weight:700;color:var(--muted);border-radius:7px;padding:5px 11px;white-space:nowrap}
+.tab:hover{color:var(--fg)}
+.tab.on{background:var(--panel);color:var(--fg);box-shadow:0 1px 2px rgba(60,40,20,.08)}
+.ed-foot{display:flex;justify-content:flex-end;border-top:1px solid var(--hair);padding-top:12px;margin-top:8px}
+.row-it .t.namebtn{text-align:left;padding:0;display:block;max-width:100%}
+.row-it .t.namebtn:hover{color:var(--accent-ink);text-decoration:underline}
+.ed .rows .empty{color:var(--muted);font-size:13px;line-height:1.7}
+.sh-wrap .filelink{margin-right:14px}
+.handoff{overflow-wrap:anywhere}
+.pdfpages{display:flex;flex-direction:column;align-items:center;gap:6px}
+.pdfpages .mk-wrap.pg{display:block;margin:0 auto 10px;box-shadow:0 1px 3px rgba(0,0,0,.25);background:#fff}
+.pdfpages .mk-wrap.pg img{display:block;width:100%;height:auto}
+.pdfpages .mk-wrap.pg.real img{width:auto}
+.pg-n{font-family:var(--f-mono);font-size:11px;color:var(--faint);align-self:center}
+.pg-note{color:var(--muted);font-size:13px;padding:20px;text-align:center;line-height:1.8}
+.pg-note .ghost{display:inline-block;margin-top:8px}

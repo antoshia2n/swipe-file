@@ -9,12 +9,13 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "shia2n-core": "github:antoshia2n/shia2n-core",
     "@supabase/supabase-js": "^2.39.0",
     "firebase": "^10.12.0",
     "lucide-react": "^0.383.0",
+    "pdfjs-dist": "4.10.38",
     "react": "^18.3.1",
-    "react-dom": "^18.3.1"
+    "react-dom": "^18.3.1",
+    "shia2n-core": "github:antoshia2n/shia2n-core"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.3.0",

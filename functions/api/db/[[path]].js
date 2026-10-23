@@ -14,6 +14,8 @@ export const onRequest = createDbGateway({
   tables: {
     sw_swipes:   { owner: "user_id" },
     sw_settings: { owner: "user_id" },  // フォルダ・表・ビュー・列・ラベルの値（1 人 1 行）
+    sw_packs:    { owner: "user_id" },  // 素材パック（3便目・作業 27）
+    sw_shares:   { owner: "user_id" },  // 共有ページ（3便目・作業 27）。生徒が見るのは /s/{token}（サーバーが鍵つきで読む）
   },
   functions: {
     // 参照回数の加算。送信内容の p_user_id を、サーバーで確定した本人の印で上書きする。
