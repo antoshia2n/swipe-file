@@ -19,7 +19,11 @@ const safeUrl = u => (/^https?:\/\//i.test(String(u || "")) ? String(u) : "");
 
 async function rest(env, path, init = {}) {
   const res = await fetch(`${base(env)}/rest/v1/${path}`, { ...init, headers: { ...headers(env), ...(init.headers || {}) } });
-  if (!res.ok) throw new Error(`rest ${res.status}`);
+  if (!res.ok) {
+    const detail = (await res.text().catch(() => "")).slice(0, 200);
+    console.error("share rest", res.status, path.split("?")[0], detail); // Cloudflare のログで原因を見られるように
+    throw new Error(`${path.split("?")[0]} ${res.status}`);
+  }
   return res.status === 204 ? null : res.json();
 }
 
@@ -69,7 +73,8 @@ const reply = (html, status = 200) => new Response(html, {
   status,
   headers: { "Content-Type": "text/html; charset=utf-8", "Cache-Control": "no-store", "X-Robots-Tag": "noindex, nofollow", "Referrer-Policy": "no-referrer" },
 });
-const message = (text, status) => reply(page("シアニンのスワイプ", `<div class="msg">${esc(text)}</div>`), status);
+// code は原因の手がかり（表の名前と返事の番号だけ。鍵や中身は出さない）
+const message = (text, status, code = "") => reply(page("シアニンのスワイプ", `<div class="msg">${esc(text)}${code ? `<div class="foot">${esc(code)}</div>` : ""}</div>`), status);
 
 function shotHTML(r) {
   const p = r.props && typeof r.props === "object" ? r.props : {};
@@ -87,14 +92,15 @@ function shotHTML(r) {
   return `<div class="shot xs">${name ? `<div><div class="xs-n">${esc(name)}</div>${p.handle ? `<div class="xs-u">${esc(p.handle)}</div>` : ""}</div>` : ""}${parts}</div>`;
 }
 
-export async function onRequestGet({ params, env, waitUntil }) {
+export async function onRequestGet(context) {
+  const { params, env } = context;
   const token = String(params.token || "");
   if (!/^[a-z0-9]{8,64}$/i.test(token)) return message(NOT_FOUND, 404);
-  if (!base(env) || !env.SUPABASE_SERVICE_ROLE_KEY) return message("いまページを開けません。少し時間をおいてもう一度開いてください。", 503);
+  if (!base(env) || !env.SUPABASE_SERVICE_ROLE_KEY) return message("いまページを開けません。少し時間をおいてもう一度開いてください。", 503, "env");
 
   let sh;
   try { [sh] = await rest(env, `sw_shares?token=eq.${encodeURIComponent(token)}&select=*&limit=1`); }
-  catch { return message("いまページを開けません。少し時間をおいてもう一度開いてください。", 503); }
+  catch (e) { return message("いまページを開けません。少し時間をおいてもう一度開いてください。", 503, e.message); }
   if (!sh) return message(NOT_FOUND, 404);
   if (!sh.live) return message("このページは公開を止めています。", 410);
   if (sh.expire_at && new Date(sh.expire_at) < new Date()) return message("このページは公開の期限が切れています。", 410);
@@ -104,14 +110,14 @@ export async function onRequestGet({ params, env, waitUntil }) {
   if (list.length) {
     const ids = list.map(x => x.id).join(",");
     try {
-      rows = await rest(env, `sw_swipes?id=in.(${ids})&user_id=eq.${encodeURIComponent(sh.user_id)}&select=id,title,body,excerpt,author,source_url,screenshot_url,file_url,props,reason,an_hypo,an_idea,highlights`);
-    } catch { return message("いまページを開けません。少し時間をおいてもう一度開いてください。", 503); }
+      rows = await rest(env, `sw_swipes?id=in.(${ids})&user_id=eq.${encodeURIComponent(sh.user_id)}&select=*`);
+    } catch (e) { return message("いまページを開けません。少し時間をおいてもう一度開いてください。", 503, e.message); }
   }
   const byId = new Map(rows.map(r => [r.id, r]));
   const its = list.map(x => ({ r: byId.get(x.id), c: x.c || "" })).filter(v => v.r);
 
   // 開かれた数を 1 足す（返事は待たない）
-  waitUntil(rest(env, `sw_shares?id=eq.${sh.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ opens: (sh.opens || 0) + 1, last_opened_at: new Date().toISOString() }) }).catch(() => {}));
+  context.waitUntil(rest(env, `sw_shares?id=eq.${sh.id}`, { method: "PATCH", headers: { Prefer: "return=minimal" }, body: JSON.stringify({ opens: (sh.opens || 0) + 1, last_opened_at: new Date().toISOString() }) }).catch(() => {}));
 
   const n = its.length, pad = i => String(i).padStart(2, "0");
   const items = its.map(({ r, c }, i) => {
