@@ -107,6 +107,7 @@ export function startApp(root) {
   const screen = $("#screen");
 
   function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => (t.hidden = true), 3200); }
+  function toastUndo(msg) { const t = $("#toast"); t.innerHTML = `<span>${esc(msg)}</span><button id="toastUndo" class="tundo">元に戻す</button>`; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => (t.hidden = true), 6000); }
   function remember() { store.set("swipe.ui.v1", { scr: S.scr, loc: S.loc, table: S.table, view: S.view }); }
   function setSaving(d) { S.saving += d; const el = $("#saveState"); if (el) el.textContent = S.saving > 0 ? "保存中…" : ""; }
 
@@ -124,7 +125,7 @@ export function startApp(root) {
     clearTimeout(cfgTimer);
     cfgTimer = setTimeout(async () => { setSaving(1); try { await D.saveSettings(CFG); } catch (e) { toast(e.message); } finally { setSaving(-1); } }, 500);
   }
-  addEventListener("beforeunload", e => { if (timers.size || S.saving > 0 || coll?.pending()) { e.preventDefault(); e.returnValue = ""; } });
+  addEventListener("beforeunload", e => { if (timers.size || S.saving > 0 || pendingDel || coll?.pending()) { e.preventDefault(); e.returnValue = ""; } });
 
   /* ── フォルダと表 ───────────────────────────────────── */
   const tableOf = id => CFG.tables.find(t => t.id === id);
@@ -294,7 +295,7 @@ export function startApp(root) {
     return `<div class="card"><div class="tw"><table><thead><tr><th style="width:36px"></th><th>見出し</th>${cols.map(k => `<th class="dragc" draggable="true" data-col="${k}">${esc(COLS[k])}</th>`).join("")}</tr></thead><tbody>
     ${a.map(it => `<tr class="${S.sel.has(it.id) ? "sel" : ""}">
       <td><input type="checkbox" class="ck" data-ck="${it.id}" ${S.sel.has(it.id) ? "checked" : ""} aria-label="選ぶ"></td>
-      <td><button class="namebtn" data-open="${it.id}"><span class="nm">${esc(it.title)}</span><span class="snip">${esc(it.a.why || it.excerpt || it.body.slice(0, 120))}</span></button></td>
+      <td><button class="namebtn ${it.shot ? "withi" : ""}" data-open="${it.id}">${it.shot ? `<img class="ti" src="${esc(it.shot)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}<span class="nmw"><span class="nm">${esc(it.title)}</span><span class="snip">${esc(it.a.why || it.excerpt || it.body.slice(0, 120))}</span></span></button></td>
       ${cols.map(k => `<td>${cellHTML(k, it)}</td>`).join("")}</tr>`).join("")}
     </tbody></table></div></div>`;
   }
@@ -351,6 +352,13 @@ export function startApp(root) {
       <div class="frow"><span class="fwrap"><button class="ghost fbtn ${nF ? "on" : ""}" id="fBtn" aria-expanded="${S.fPop}">${IC.filter}絞り込み${nF ? ` <b>${nF}</b>` : ""}</button>${S.fPop ? `<div class="fpop" role="dialog" aria-label="絞り込み">${labelSels(S.f, "f")}</div>` : ""}</span>
         ${fChips}${anyF ? `<button class="fclear" id="fClear">外す</button>` : ""}<span class="lsub" style="margin-left:auto">${a.length} 件${f.star || f.todo ? `・ビュー「${esc(v.name)}」の条件つき` : ""}</span>${colBtn}</div>
       ${S.sel.size ? `<div class="bulk"><span>${S.sel.size} 件を選択中</span><select id="bulkMove" aria-label="移す先"><option value="">表へ移す…</option>${moveOpts}</select>
+        <select id="bulkSet" aria-label="まとめて付ける"><option value="">まとめて付ける…</option>
+          <option value="ai:1">Claude に分析を頼む</option>
+          <optgroup label="評価">${[5, 4, 3, 2, 1].map(g => `<option value="grade:${g}">${GRADE[g]}</option>`).join("")}<option value="grade:0">評価を外す</option></optgroup>
+          <optgroup label="種類">${labelList("shu").map(v => `<option value="shu:${esc(v)}">${esc(v)}</option>`).join("")}</optgroup>
+          <optgroup label="参考ポイントを足す">${labelList("ref").map(v => `<option value="ref:${esc(v)}">${esc(v)}</option>`).join("")}</optgroup>
+          <optgroup label="ジャンルを足す">${labelList("genre").map(v => `<option value="genre:${esc(v)}">${esc(v)}</option>`).join("")}</optgroup>
+          <optgroup label="ラベルを足す">${labelList("tag").map(v => `<option value="tag:${esc(v)}">${esc(v)}</option>`).join("")}</optgroup></select>
         <select id="bulkPack" aria-label="入れる素材パック"><option value="">素材パックに入れる…</option>${coll.DATA.pack.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}<option value="new">＋ 新しい素材パック</option></select>
         <select id="bulkShare" aria-label="入れる共有ページ"><option value="">共有ページに入れる…</option>${coll.DATA.share.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}<option value="new">＋ 新しい共有ページ</option></select>
         <button id="bulkClear">選択をやめる</button></div>` : ""}
@@ -453,7 +461,7 @@ export function startApp(root) {
         <label>リンク<input id="dtUrl" value="${esc(it.url)}" placeholder="https://"></label>
         <label>本文<textarea class="dt-ta" id="bodyEdit" style="min-height:160px">${esc(it.body)}</textarea></label></div>
       <div class="hlbar"><label class="ghost" style="cursor:pointer">画像を差し替える<input type="file" id="shotIn" accept="image/*" hidden></label>${it.file ? "" : `<label class="ghost" style="cursor:pointer">PDF を付ける<input type="file" id="pdfIn" accept="application/pdf" hidden></label>`}
-        <button class="ghost ${S.delArm ? "danger" : ""}" id="delItem" style="margin-left:auto">${S.delArm ? "もう一度押すと消える" : "この 1 件を消す"}</button></div>`);
+        <button class="ghost" id="delItem" style="margin-left:auto">この 1 件を消す</button></div>`);
     return `<div class="scrim" id="scrim"></div><aside class="detail peek" aria-label="くわしく">
      <div class="dt-top">
        <div class="dt-nav"><button class="icon" data-step="-1" ${idx <= 0 ? "disabled" : ""} aria-label="前の 1 件（K）">${IC.up}</button><button class="icon" data-step="1" ${idx < 0 || idx >= list.length - 1 ? "disabled" : ""} aria-label="次の 1 件（J）">${IC.down}</button>${idx >= 0 ? `<span class="num">${idx + 1} / ${list.length}</span>` : ""}</div>
@@ -493,6 +501,11 @@ export function startApp(root) {
   /* ── 足す窓 ─────────────────────────────────────────── */
   // 足す窓の置き場は「自動」が既定。自動は X→今月の表、note→記事、PDF→教材PDF、ほかは開いている表（無ければ未整理）
   const browsingTable = () => (S.loc.startsWith("f:") && tableOf(S.table) ? S.table : "");
+  // 同じリンクがもう保存されていたら知らせる（保存は止めない）
+  function dupHTML(url) {
+    const d = D.findSame(ITEMS, url); if (!d) return '<div id="adDup"></div>';
+    return `<div id="adDup" class="dup">このリンクは保存済み（${esc(d.saved)}・${esc(pathOf(d.table).join(" / "))}）<button class="ghost" data-dupopen="${d.id}">開く</button></div>`;
+  }
   function addHTML() {
     const A = S.add;
     const opts = `<option value="" ${A.table === "" ? "selected" : ""}>自動（X は今月の表・note は記事・PDF は教材PDF・ほかは開いている表）</option>${CFG.tables.map(t => `<option value="${t.id}" ${t.id === A.table ? "selected" : ""}>${esc(pathOf(t.id).join(" / "))}</option>`).join("")}`;
@@ -500,6 +513,7 @@ export function startApp(root) {
       <div class="m-top"><b style="font-size:15px">スワイプを足す</b><button class="icon" id="mClose" aria-label="閉じる">${IC.x}</button></div>
       <div class="addf">
         <label>リンク<input id="adUrl" value="${esc(A.url)}" placeholder="https://x.com/… や note の URL（無くてもよい）"></label>
+        ${dupHTML(A.url)}
         <label>見出し<input id="adTitle" value="${esc(A.title)}" placeholder="空ならリンク先の題名か本文の書き出しから付ける"></label>
         <label>本文<textarea id="adBody" rows="6" placeholder="ポストや記事の本文を貼る（無くてもよい）">${esc(A.body)}</textarea></label>
         <div class="drop ${A.file ? "has" : ""}" id="drop">${A.file ? `${IC.file}<span>${esc(A.file.name)}</span><button class="icon" id="adFileX" aria-label="外す">${IC.x}</button>` : `画像か PDF をここへ落とす・貼る・<label class="lnk">選ぶ<input type="file" id="adFile" accept="image/*,application/pdf" hidden></label>`}</div>
@@ -550,6 +564,31 @@ export function startApp(root) {
   }
   const changed = (it, wait) => queueSave(it, wait);
 
+  /* ── 消す（数秒は元に戻せる。確定したら置き場のファイルも消す） ── */
+  let pendingDel = null;
+  function commitRemove() {
+    const P = pendingDel; if (!P) return; pendingDel = null; clearTimeout(P.timer);
+    setSaving(1);
+    D.deleteItem(P.it.id)
+      .then(() => D.removeFiles([P.it.props?.shot, P.it.file?.url].filter(Boolean)))
+      .catch(err => { ITEMS.splice(Math.min(P.idx, ITEMS.length), 0, P.it); render(); toast(err.message); })
+      .finally(() => setSaving(-1));
+  }
+  function removeWithUndo(it) {
+    if (!it) return;
+    commitRemove(); // 前に消したものは、ここで確定する
+    clearTimeout(timers.get(it.id)); timers.delete(it.id);
+    const idx = ITEMS.findIndex(x => x.id === it.id);
+    ITEMS = ITEMS.filter(x => x.id !== it.id); S.open = null; S.lb = null; S.sel.delete(it.id); render();
+    pendingDel = { it, idx, timer: setTimeout(commitRemove, 6000) };
+    toastUndo(`「${it.title.slice(0, 24)}」を消しました`);
+  }
+  function undoRemove() {
+    const P = pendingDel; if (!P) return; pendingDel = null; clearTimeout(P.timer);
+    ITEMS.splice(Math.min(P.idx, ITEMS.length), 0, P.it); S.open = P.it.id; render(); toast("元に戻しました");
+  }
+  addEventListener("pagehide", commitRemove);
+
   /* ── 足す ───────────────────────────────────────────── */
   function openAdd() { S.modal = "add"; S.add = { url: "", title: "", body: "", why: "", table: "", file: null, fileObj: null, busy: false }; render(); setTimeout(() => { const n = $("#adUrl"); n && n.focus(); }, 0); }
   function setAddFile(f) {
@@ -589,6 +628,7 @@ export function startApp(root) {
     const t = e.target, q = s => t.closest(s); let b;
     if (q("#addBtn")) { openAdd(); return; }
     if (b = q("[data-scr]")) { if (S.scr !== b.dataset.scr) { S.scr = b.dataset.scr; S.open = null; S.lb = null; S.cellPop = null; S.sel.clear(); render(); main0(); } return; }
+    if (q("#toastUndo")) { undoRemove(); $("#toast").hidden = true; return; }
     if (!screen.contains(t)) return;
     if (S.scr !== "app") { if (q("#navBtn")) { S.navOn = !S.navOn; render(); return; } coll.onClick(S.scr, t); return; }
     let closed = false; if (!q(".colbtn") && S.colPop) { S.colPop = false; closed = true; }
@@ -658,14 +698,8 @@ export function startApp(root) {
     if (q("#bodyToggle")) { S.bodyEdit = !S.bodyEdit; render(); return; }
     if (q("#usedAdd")) { const v = $("#usedIn").value.trim(); if (!v) { toast("使った先を書いてから押してください"); return; } const it = cur(); const p = D.jstParts(); it.used.unshift({ w: v, d: `${p.y}-${p.m}-${p.d}` }); changed(it, 0); render(); return; }
     if (b = q("[data-usedrm]")) { const it = cur(); it.used.splice(+b.dataset.usedrm, 1); changed(it, 0); render(); return; }
-    if (q("#delItem")) {
-      if (!S.delArm) { S.delArm = true; render(); return; }
-      const it = cur(); clearTimeout(timers.get(it.id)); timers.delete(it.id);
-      setSaving(1);
-      D.deleteItem(it.id).then(() => { ITEMS = ITEMS.filter(x => x.id !== it.id); S.open = null; S.delArm = false; render(); toast("消しました"); })
-        .catch(err => toast(err.message)).finally(() => setSaving(-1));
-      return;
-    }
+    if (q("#delItem")) { removeWithUndo(cur()); return; }
+    if (b = q("[data-dupopen]")) { S.modal = null; S.add = null; S.open = b.dataset.dupopen; render(); return; }
     if (q("#mClose") || t.id === "mScrim") { if (!S.add?.busy) { S.modal = null; S.add = null; render(); } return; }
     if (q("#adSave")) { saveAdd(); return; }
     if (q("#adFileX")) { S.add.file = null; S.add.fileObj = null; render(); return; }
@@ -685,6 +719,19 @@ export function startApp(root) {
   screen.addEventListener("change", async e => {
     const t = e.target;
     if (S.scr !== "app") { coll.onChange(S.scr, t); return; }
+    if (t.id === "bulkSet" && t.value) {
+      const i = t.value.indexOf(":"), k = t.value.slice(0, i), v = t.value.slice(i + 1);
+      const sel = ITEMS.filter(it => S.sel.has(it.id));
+      const NAME = { ai: "Claude に分析を頼む", grade: "評価", shu: "種類", ref: "参考ポイント", genre: "ジャンル", tag: "ラベル" };
+      sel.forEach(it => {
+        if (k === "ai") it.ai = true;
+        else if (k === "grade") it.star = +v;
+        else if (k === "shu") it.shu = v;
+        else { const f = k === "tag" ? "tags" : k; if (!it[f].includes(v)) it[f] = [...it[f], v]; }
+        changed(it, 0);
+      });
+      render(); toast(`${sel.length} 件に「${k === "ai" ? NAME.ai : `${NAME[k]}：${k === "grade" ? (GRADE[v] || "なし") : v}`}」を付けました`); return;
+    }
     if ((t.id === "bulkPack" || t.id === "bulkShare") && t.value) {
       const k = t.id === "bulkPack" ? "pack" : "share", ids = ITEMS.filter(it => S.sel.has(it.id)).map(it => it.id);
       const o = await coll.addTo(k, t.value, ids);
@@ -725,7 +772,7 @@ export function startApp(root) {
     if (t.id === "dtUrl" && it) { it.url = t.value.trim(); changed(it); return; }
     if (t.id === "bodyEdit" && it) { it.body = t.value; changed(it); return; }
     if (S.add) {
-      if (t.id === "adUrl") S.add.url = t.value;
+      if (t.id === "adUrl") { S.add.url = t.value; const box = document.getElementById("adDup"); if (box) box.outerHTML = dupHTML(t.value); }
       else if (t.id === "adTitle") S.add.title = t.value;
       else if (t.id === "adBody") S.add.body = t.value;
       else if (t.id === "adWhy") S.add.why = t.value;

@@ -57,10 +57,10 @@ mark{background:color-mix(in srgb,var(--accent) 28%,transparent);color:inherit;b
 .foot{font-size:11.5px;color:var(--faint);text-align:center;margin-top:12px}
 @media (max-width:720px){.item{grid-template-columns:1fr}h1{font-size:24px}}`;
 
-function page(title, body, desc = "") {
+function page(title, body, desc = "", image = "") {
   return `<!doctype html><html lang="ja"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
 <meta name="robots" content="noindex,nofollow"><title>${esc(title)}</title>
-<meta property="og:title" content="${esc(title)}">${desc ? `<meta property="og:description" content="${esc(desc.slice(0, 120))}"><meta name="description" content="${esc(desc.slice(0, 120))}">` : ""}
+<meta property="og:title" content="${esc(title)}"><meta property="og:type" content="website"><meta property="og:site_name" content="シアニンのスワイプ">${image ? `<meta property="og:image" content="${esc(image)}"><meta name="twitter:card" content="summary_large_image"><meta name="twitter:image" content="${esc(image)}">` : `<meta name="twitter:card" content="summary">`}${desc ? `<meta property="og:description" content="${esc(desc.slice(0, 120))}"><meta name="description" content="${esc(desc.slice(0, 120))}">` : ""}
 <link rel="icon" href="/favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com"><link href="https://fonts.googleapis.com/css2?family=Geist:wght@400;600;700;800&family=Geist+Mono:wght@400&display=swap" rel="stylesheet">
 <style>${CSS}</style></head><body>${body}</body></html>`;
@@ -131,5 +131,8 @@ export async function onRequestGet({ params, env, waitUntil }) {
   const cta = sh.cta ? `<div class="cta"><div class="cta-t">${esc(sh.cta_text)}</div>${ctaUrl ? `<a class="cta-b" href="${esc(ctaUrl)}" target="_blank" rel="noopener">${esc(sh.cta_btn || "くわしく見る")}</a>` : ""}</div>` : "";
   const body = `<div class="wrap"><header><div class="k">シアニンのスワイプ</div><h1>${esc(sh.name)}</h1>${sh.intro ? `<p class="d">${esc(sh.intro)}</p>` : ""}<div class="by">${n} 件</div></header>
     ${items || '<div class="msg" style="margin-top:20px">まだ何も入っていません。</div>'}${cta}<div class="foot">このページは検索サイトには出ません。リンクを知っている人だけが見られます。</div></div>`;
-  return reply(page(sh.name, body, sh.intro));
+  // リンクを LINE などに貼ったときの見出しの画像：1 件目から順に、画像のあるものを使う
+  const cover = its.map(({ r }) => { const p = r.props && typeof r.props === "object" ? r.props : {}; return safeUrl(p.shot || r.screenshot_url || p.ogImage); }).find(Boolean) || "";
+  const desc = sh.intro || `${n} 件の見本`;
+  return reply(page(sh.name, body, desc, cover));
 }

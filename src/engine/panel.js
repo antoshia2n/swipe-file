@@ -86,11 +86,14 @@ export function startPanel(root) {
     if (S.loading && !S.page) return `<div class="box"><div class="box-h">見ているページを読んでいます…</div></div>`;
     if (!S.page) return `<div class="box"><div class="box-h">見ているページを保存</div><div class="warnline">${esc(S.err || "このページは読めません")}</div><button class="ghost" id="pnRetry">もう一度読む</button></div>`;
     const P = S.page, X = P.x;
+    // 同じポスト・ページがもう保存されていたら知らせる（二重に保存しないため。保存は止めない）
+    const dup = D.findSame(S.items, X ? `https://x.com/${X.main.handle}/status/${X.main.id}` : P.url);
+    const dupLine = dup ? `<div class="dup">保存済み（${esc(dup.saved)}・${esc(tableName(dup.table))}）<a class="ghost" href="/?open=${encodeURIComponent(dup.id)}" target="_blank" rel="noopener">開く</a></div>` : "";
     if (X) {
       const posts = S.thread ? X.thread : [X.main];
       const m = X.main;
       const nums = [m.like && `いいね ${m.like}`, m.rt && `RT ${m.rt}`, m.view && `表示 ${m.view}`].filter(Boolean);
-      return `<div class="box"><div class="box-h">このポストを保存<span>${S.saved === P.url ? "保存済み" : "自動で読み取った"}</span></div>
+      return `<div class="box"><div class="box-h">このポストを保存<span>${dup ? "保存済み" : "自動で読み取った"}</span></div>${dupLine}
         <div class="xs-h"><div class="av" style="--c:var(--k-x)">${esc((m.name || m.handle || "X").slice(0, 1))}</div><div><div class="xs-n">${esc(m.name)}</div><div class="xs-u">@${esc(m.handle)}${m.time ? `・${esc(D.shortDate(m.time))}` : ""}</div></div></div>
         ${X.thread.length > 1 ? `<div class="thread"><div><b>スレッドを見つけた（本人の続きをあわせて ${X.thread.length} 件）</b></div>
           <div class="pick"><button class="pk ${S.thread ? "on" : ""}" data-thr="1">まとめて 1 件にする</button><button class="pk ${!S.thread ? "on" : ""}" data-thr="0">この 1 件だけ</button></div></div>` : ""}
@@ -98,14 +101,14 @@ export function startPanel(root) {
         ${nums.length ? `<div class="auto">${nums.map(n => `<span>${esc(n)}</span>`).join("")}</div>` : ""}
         <div><div class="dt-h">スクショの撮り方</div><div class="cap">${capBtn("post", "ポストだけ")}${capBtn("screen", "見えている範囲")}${capBtn("crop", "範囲を選ぶ")}</div><div class="dt-h" style="margin:6px 0 0;font-weight:500">${capNote[S.mode]}</div></div>
         ${fieldsHTML(true, P.url)}
-        <button class="ink save" id="pnSave" ${S.busy ? "disabled" : ""}>${S.busy ? "保存しています…" : S.saved === P.url ? "もう一度保存する" : "保存する"}</button></div>`;
+        <button class="ink save" id="pnSave" ${S.busy ? "disabled" : ""}>${S.busy ? "保存しています…" : dup ? "もう一度保存する" : "保存する"}</button></div>`;
     }
     const mode = S.mode === "post" ? "screen" : S.mode;
-    return `<div class="box"><div class="box-h">このページを保存<span>${esc(P.site)}</span></div>
+    return `<div class="box"><div class="box-h">このページを保存<span>${esc(P.site)}</span></div>${dupLine}
       <div><div class="xs-n" style="font-size:13.5px">${esc(P.ogTitle || P.title || P.url)}</div>${P.desc ? `<div class="warnline" style="margin-top:4px">${esc(P.desc.slice(0, 140))}</div>` : ""}</div>
       <div><div class="dt-h">スクショの撮り方</div><div class="cap" style="grid-template-columns:repeat(2,1fr)">${capBtn("screen", "見えている範囲")}${capBtn("crop", "範囲を選ぶ")}</div><div class="dt-h" style="margin:6px 0 0;font-weight:500">${capNote[mode]}　ページ全体は GoFullPage で撮って下へ落とす。</div></div>
       ${fieldsHTML(false, P.url)}
-      <button class="ink save" id="pnSave" ${S.busy ? "disabled" : ""}>${S.busy ? "保存しています…" : "保存する"}</button></div>`;
+      <button class="ink save" id="pnSave" ${S.busy ? "disabled" : ""}>${S.busy ? "保存しています…" : dup ? "もう一度保存する" : "保存する"}</button></div>`;
   }
   function dropBox() {
     const F = S.file;

@@ -617,3 +617,12 @@ tr:hover .grade.g0,.grade.g0:focus{color:var(--faint);border-color:var(--line);b
 }
 .ltitle{font-size:24px}
 .tw .chips{flex-wrap:nowrap}
+.toast{display:flex;align-items:center;gap:12px}
+.toast[hidden]{display:none}
+.tundo{color:var(--accent);font-weight:800;font-size:13px;padding:2px 4px;border-radius:6px}
+.tundo:hover{text-decoration:underline}
+.namebtn.withi{display:flex;flex-direction:row;gap:10px;align-items:center}
+.namebtn .ti{width:36px;height:36px;border-radius:6px;object-fit:cover;object-position:top;border:1px solid var(--line);flex:none;background:var(--soft)}
+.namebtn .nmw{display:flex;flex-direction:column;min-width:0}
+.dup{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;font-weight:600;color:var(--accent-ink);background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:8px;padding:6px 10px}
+.dup .ghost{padding:3px 9px}
