@@ -1,21 +1,18 @@
-# swipe-file（スワイプファイルアプリ）
+# swipe-file（スワイプくん）
 
-参考にしたい他者コンテンツを「URL・理由・タグ」の3点セットで貯め、AI が制作時に1発で参照できる状態を作るアプリ。
+X の参考ポスト・note・情報商材・自分の資料を、リンク・本文・画像・分析と一緒に貯め、
+種類・参考ポイント・評価・ジャンル・分析・ラベルで探せるようにするアプリ。AI からは swipe-mcp で読む・足す。
 
-- 要件：Notion「スワイプファイルアプリ 要件定義 v1.8」が唯一の正
-  https://app.notion.com/p/3ab9c6c1c439817abee4ee95f6a8a906
-  （チャットへのMD貼付での受け渡しは廃止。改訂は常に上記ページ）
-- 基盤：shia2n-app-template ＋ shia2n-core（React + Vite + Supabase + Cloudflare Pages）
-
----
+- 住所：https://swipe.shia2n.jp（Cloudflare Pages。main に結合すると自動で出る）
+- 基盤：shia2n-core（AuthGuard・データの出入り口・置き場の出入り口）＋ Vite
+- 画面：`src/engine/app.js`（デモ 8 の形をそのまま本物のデータにつないだもの。React は入口だけ）
 
 ## 環境変数（Cloudflare Pages → Settings → Environment variables）
-
-既存アプリからコピペできるもの：
 
 ```
 VITE_SUPABASE_URL
 VITE_SUPABASE_ANON_KEY
+VITE_DB_GATEWAY            /api/db
 VITE_FIREBASE_API_KEY
 VITE_FIREBASE_AUTH_DOMAIN
 VITE_FIREBASE_PROJECT_ID
@@ -23,57 +20,24 @@ VITE_FIREBASE_STORAGE_BUCKET
 VITE_FIREBASE_MESSAGING_SENDER_ID
 VITE_FIREBASE_APP_ID
 VITE_FIREBASE_DATABASE_ID
-ANTHROPIC_API_KEY
+SUPABASE_SERVICE_ROLE_KEY
+SWIPE_ALLOW_UID            任意。ファイルを上げられる人（カンマ区切り）。未設定なら Naoki 1 人
 ```
 
-このアプリだけで新しく必要なもの：
-
-```
-ZEUS_EXTERNAL_SECRET   Zeus v2 外部API の合言葉（Zeus 側と同じ値）
-ZEUS_USER_ID           Zeus v2 側のユーザーID（索引の登録先）
-```
-
-Production / Preview の両方に設定する。
-
----
+`ANTHROPIC_API_KEY`・`ZEUS_EXTERNAL_SECRET`・`ZEUS_USER_ID` はもう使わない（Claude の口と Zeus 連携は外した）。
 
 ## 診断ページ
 
-デプロイ後、`https://<アプリのURL>/diag` を開くと、環境変数・Supabase 接続・
-テーブル実在・Zeus 疎通・Claude 疎通を1画面で確認できる。
-生の JSON が欲しいときは `/diag?json=1`。
-
----
+`/diag`（`/diag?json=1` で JSON）。表 2 つの実在、公開キーで表にも置き場にも届かないことを 1 画面で見る。
 
 ## Supabase
 
-`sql/01_pre_check.sql`（事前確認）→ `sql/02_create_tables.sql`（作成）→
-`sql/03_v17_columns.sql`（カラム追加）→ `sql/04_storage.sql`（原本ファイルの保存先）
-の順に Supabase SQL Editor で実行する。
-いずれも何回実行しても同じ結果になる。
+- `sw_swipes`：1 件 1 行。スワイプくんで足した列は `table_id`（置き場）・`shu`（種類）・`refs`（参考ポイント）・`grade`（評価 0〜5）・`genres`・`labels`・`reason`（言語化）・`an_hypo`（仮説）・`an_idea`（用途抽出）・`highlights`（本文の線）・`used_log`（使った記録）・`props`（種類ごとの欄・保存時の数字・画像の住所）・`ai_ask`（Claude に分析を頼む印）
+- `sw_settings`：1 人 1 行。フォルダ・表・ビュー・列の並び・ラベルの選べる値
+- 置き場 `swipe-files`：読むのは公開の住所。書くのは `/api/storage/upload` だけ（公開キーでは書けない）
+- 表を変える SQL は GPT への作業の 1 枚で渡す（作業 25：https://www.notion.so/4029c6c1c43981d9a128eeaa5c810e41）
 
-- `sw_swipes`：スワイプ本体（本文 `body` / 原本 `file_url` / 公開区分 `visibility` / 参照回数 `ref_count` を含む）
-- `sw_zeus_orphans`：削除済みスワイプの Zeus 索引ID（掃除待ち）
-- `sw_increment_ref(uuid)`：参照回数を1つ増やす関数（詳細画面表示・`swipe__get` から呼ぶ）
+## 1便目に入れていないもの
 
----
-
-## 画面
-
-| 画面 | 中身 |
-|---|---|
-| 一覧 | 検索・絞り込み（タグ／媒体／軸／状態）・並び替え（登録日順／参照が多い順）・活用済を隠すトグル |
-| 登録 | 「1件ずつ」＝URL・本文・ファイルのどれか＋理由 →補完→確認して保存／「まとめて」＝URLリストを貼って一括登録 |
-| 詳細 | 全項目の編集・活用済切替・削除。開いた時点で参照回数が1つ増える |
-
-## 実装ブロック
-
-| ブロック | 内容 | 状態 |
-|---|---|---|
-| 1 | DB ＋ /diag | 完了 |
-| 2 | F1/F3/F6（UI基本） | 完了 |
-| 2.5 | v1.7 カラム追加＋保存条件の修正 | 完了 |
-| 3 | F4（MCP・独立Worker） | 未着手 |
-| 3.5 | F7（ファイル取り込み） | 完了 |
-| 4 | F5（Zeus索引連携） | 完了 |
-| 5 | F2（一括取り込み） | 完了 |
+- X 上のサイドパネル（2便目）
+- 素材パック・共有ページ（3便目）
