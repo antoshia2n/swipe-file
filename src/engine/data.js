@@ -206,8 +206,8 @@ export async function createItem(f) {
   if (x) og = { ...og, title: "", description: "", author: x.author || og?.author };
   const text = body || x?.text || "";
   const t = deriveTitle({ manualTitle: f.title || "", pageTitle: og?.title || "", body: text, fileName: f.file?.name || "" });
-  const props = {};
-  if (x?.handle) props.handle = x.handle;
+  const props = { ...(f.props || {}) };
+  if (x?.handle && !props.handle) props.handle = x.handle;
   if (f.file?.kind === "img") props.shot = f.file.url;
   if (isPdf) props.file_name = f.file.name;
   if (og?.image) props.ogImage = og.image;
@@ -218,12 +218,14 @@ export async function createItem(f) {
     body: text || null,
     reason: (f.why || "").trim(),
     source_type: src,
-    author: og?.author || null,
+    author: f.author || og?.author || null,
     excerpt: deriveExcerpt({ pageDescription: og?.description || "", body: text }) || null,
     status: "未活用",
     visibility: "private",
     table_id: f.table || null,
     shu: f.shu || shuFromSource(src) || null,
+    refs: f.refs || [],
+    grade: f.grade || 0,
     file_url: isPdf ? f.file.url : null,
     props,
   };
