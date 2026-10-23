@@ -119,13 +119,12 @@ export function createColl(x) {
   function navHTML(k) {
     const st = CS[k];
     const cntT = tid => DATA[k].filter(o => o.table === tid).length;
-    const nv = (key, label, n, icon, cls = "") => `<button class="nv ${st.loc === key ? "on" : ""} ${cls}" data-cloc="${key}">${icon || '<span class="nv-dot" style="--c:var(--accent)"></span>'}<span class="nv-l">${esc(label)}</span><span class="nv-n">${n}</span></button>`;
+    const nv = (key, label, n, icon, cls = "") => `<button class="nv ${st.loc === key ? "on" : ""} ${cls}" data-cloc="${key}">${icon || '<span class="nv-dot" style="--c:var(--accent)"></span>'}<span class="nv-l">${esc(label)}</span><span class="nv-n">${n || ""}</span></button>`;
     const tree = (p, d) => conf(k).folders.filter(f => f.parent === p).map(f => nv("f:" + f.id, f.name, tablesIn(k, f.id).reduce((s, t) => s + cntT(t.id), 0), IC.folder, "d" + Math.min(d, 2)) + tree(f.id, d + 1)).join("");
     const un = DATA[k].filter(o => !tableOf(k, o.table)).length;
     return `<nav class="nav ${x.S.navOn ? "" : "off"}" aria-label="${LABEL[k]}のメニュー"><div class="nav-list">${nv("all", "すべての" + LABEL[k], DATA[k].length)}
       ${un ? nv("unsorted", "未整理（置き場なし）", un, '<span class="nv-dot" style="--c:var(--k-lp)"></span>') : ""}
-      <div class="nh"><span>フォルダ</span><button id="cAddFolder" aria-label="フォルダを足す" title="フォルダを足す">＋</button></div>${tree(null, 0)}</div>
-      <div class="nav-foot">${esc(LEAD[k])}</div></nav>`;
+      <div class="nh"><span>フォルダ</span><button id="cAddFolder" aria-label="フォルダを足す" title="フォルダを足す">＋</button></div>${tree(null, 0)}</div></nav>`;
   }
 
   /* ── 一覧 ── */

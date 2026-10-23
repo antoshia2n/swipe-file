@@ -284,3 +284,23 @@ export async function createShare(f) {
 }
 export const saveShare = s => run(supabase.from(SHARES_TABLE).update(sharePatch(s)).eq("id", s.id).select("id"), "共有ページを保存できませんでした");
 export const deleteShare = id => run(supabase.from(SHARES_TABLE).delete().eq("id", id).select("id"), "共有ページを消せませんでした");
+
+/* ── 4便目：ファイルを置き場から消す・同じものの見分け ─────────── */
+/** 消したスワイプのファイルを置き場からも消す（ほかの行が使っているものは残す）。失敗しても止めない */
+export async function removeFiles(urls) {
+  const list = urls.filter(u => u && u.startsWith(`${SUPABASE_URL}/storage/v1/object/public/${BUCKET}/shots/`));
+  if (!list.length) return;
+  const user = auth.currentUser; if (!user) return;
+  const token = await user.getIdToken();
+  await fetch("/api/storage/remove", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ urls: list }) }).catch(() => {});
+}
+
+/** 同じものかを見分ける鍵。X はポストの番号、ほかは住所の余計な部分（http・www・末尾の /・?・#）を外したもの */
+export function sameKey(url) {
+  const u = String(url || "").trim();
+  if (!u) return "";
+  const x = /(?:x|twitter)\.com\/[^/]+\/status\/(\d+)/i.exec(u);
+  if (x) return "x:" + x[1];
+  return u.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/[?#].*$/, "").replace(/\/+$/, "").toLowerCase();
+}
+export const findSame = (items, url) => { const k = sameKey(url); return k ? items.find(it => sameKey(it.url) === k) : null; };
