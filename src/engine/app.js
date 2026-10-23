@@ -53,6 +53,11 @@ export const DEFAULT_SETTINGS = () => ({
   coll: DEFAULT_COLL(),
 });
 
+// シアニン共通のアイコン（プロジェクト資料 claude/icon-rules.md の形・スワイプくんの色と絵）
+const BRAND_ICON = '<svg class="brand-i" width="22" height="22" viewBox="0 0 128 128" aria-hidden="true"><defs><clipPath id="bic"><path d="M44 0H114A14 14 0 0 1 128 14V84A44 44 0 0 1 84 128H14A14 14 0 0 1 0 114V44A44 44 0 0 1 44 0Z"/></clipPath><mask id="bim"><rect width="128" height="128" fill="#fff"/><g fill="#000"><circle cx="132" cy="40" r="19"/><circle cx="-4" cy="90" r="19"/></g></mask></defs><g mask="url(#bim)"><g clip-path="url(#bic)"><rect width="128" height="128" fill="#2563eb"/><path d="M0 128V58C34 58 40 82 64 82S94 104 128 104V128Z" fill="#000" fill-opacity=".22"/></g><g transform="translate(14 14) scale(4.17)" fill="none" stroke="#fff" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h12v17l-6-4.2-6 4.2z"/><path d="M9.5 8.5h5M9.5 12h5"/></g></g></svg>';
+const F_NAME = { shu: "種類", ref: "参考ポイント", star: "評価", genre: "ジャンル", stagex: "分析", tag: "ラベル" };
+const isPhone = () => matchMedia("(max-width: 640px)").matches;
+
 /* ── 小さな道具 ───────────────────────────────────────── */
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
 const toggle = (arr, v) => arr.includes(v) ? arr.filter(x => x !== v) : [...arr, v];
@@ -74,6 +79,7 @@ const IC = {
   file: '<svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 3H7a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h10a2 2 0 0 0 2-2V8z"/><path d="M14 3v5h5"/></svg>',
   link: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 4h6v6M20 4l-9 9M18 14v5a1 1 0 0 1-1 1H5a1 1 0 0 1-1-1V7a1 1 0 0 1 1-1h5"/></svg>',
   menu: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M4 6h16M4 12h16M4 18h16"/></svg>',
+  filter: '<svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round"><path d="M4 6h16M7 12h10M10 18h4"/></svg>',
   close: '<svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M6 6l12 12M18 6 6 18"/></svg>',
 };
 
@@ -86,14 +92,14 @@ export function startApp(root) {
     loading: true, err: "", scr: ["app", "pack", "share"].includes(remembered.scr) ? remembered.scr : "app",
     loc: remembered.loc || "all", table: remembered.table || null, view: remembered.view || "v1",
     q: "", f: {}, sel: new Set(), open: null, navOn: innerWidth > 860,
-    colPop: false, cellPop: null, fold: new Set(), lb: null, dragCol: null, modal: null, add: null, delArm: false, bodyEdit: false, saving: 0,
+    colPop: false, fPop: false, cellPop: null, fold: new Set(), lb: null, dragCol: null, modal: null, add: null, delArm: false, bodyEdit: false, saving: 0,
   };
 
   root.innerHTML = `<div id="app">
     <div class="top gut">
-      <div class="brand">スワイプくん<span>.</span></div>
+      <div class="brand">${BRAND_ICON}<span class="brand-t">スワイプくん<span>.</span></span></div>
       <nav class="hm" aria-label="機能"><button data-scr="app">スワイプ</button><button data-scr="pack">素材パック</button><button data-scr="share">共有ページ</button></nav>
-      <div class="top-r"><span class="lsub" id="saveState"></span><button class="ink" id="addBtn">＋ 足す</button></div>
+      <div class="top-r"><span class="lsub" id="saveState"></span><button class="ink" id="addBtn" aria-label="足す">＋<span class="add-t"> 足す</span></button></div>
     </div>
     <div class="screen" id="screen"></div>
   </div><div class="toast" id="toast" hidden></div>`;
@@ -183,7 +189,7 @@ export function startApp(root) {
     return `<select class="grade g${g}" data-grade="${it.id}" aria-label="評価">${["", 5, 4, 3, 2, 1].map(v => `<option value="${v}" ${String(v) === String(g || "") ? "selected" : ""}>${v ? GRADE[v] : "―"}</option>`).join("")}</select>`;
   }
   const stageHTML = it => { const n = stageOf(it); return `<span class="stage ${n ? "" : "none"}">${STAGES[n]}</span>`; };
-  const chipsHTML = (arr, c, max = 2) => arr.length ? `<div class="chips">${arr.slice(0, max).map(x => `<span class="chip" style="--c:${c}">${esc(x)}</span>`).join("")}${arr.length > max ? `<span class="chip">+${arr.length - max}</span>` : ""}</div>` : '<span class="num">―</span>';
+  const chipsHTML = (arr, c, max = 2) => arr.length ? `<div class="chips">${arr.slice(0, max).map(x => `<span class="chip" style="--c:${c}">${esc(x)}</span>`).join("")}${arr.length > max ? `<span class="chip">+${arr.length - max}</span>` : ""}</div>` : '<span class="ecell"></span>';
   const metricOf = it => { const m = it.m || {}, e = it.ex || {}; const v = m.view || e["表示"]; if (v) return `表示 ${v}`; return m.like || e["いいね"] || e["スキ"] || "―"; };
   function shotHTML(it, big) {
     if (it.shot) return `<div class="shot img"><span class="shot-tag">${it.shotIsOg ? "リンク先の画像" : "保存した画像"}</span><img src="${esc(it.shot)}" alt="" loading="lazy" referrerpolicy="no-referrer"></div>`;
@@ -205,20 +211,20 @@ export function startApp(root) {
   /* ── 左のメニュー ───────────────────────────────────── */
   function navHTML() {
     const cnt = f => ITEMS.filter(f).length;
-    const nv = (key, label, n, opts = {}) => `<button class="nv ${S.loc === key ? "on" : ""} ${opts.cls || ""}" data-loc="${key}">${opts.icon || `<span class="nv-dot" style="--c:${opts.c || "var(--faint)"}"></span>`}<span class="nv-l">${esc(label)}</span><span class="nv-n">${n}</span></button>`;
+    const nv = (key, label, n, opts = {}) => `<button class="nv ${S.loc === key ? "on" : ""} ${opts.cls || ""}" data-loc="${key}">${opts.icon || `<span class="nv-dot" style="--c:${opts.c || "var(--faint)"}"></span>`}<span class="nv-l">${esc(label)}</span><span class="nv-n">${n || ""}</span></button>`;
     const tree = (parent, depth) => CFG.folders.filter(f => f.parent === parent).map(f => {
       const n = tablesIn(f.id).reduce((s, t) => s + cnt(it => it.table === t.id), 0);
       return nv("f:" + f.id, f.name, n, { icon: IC.folder, cls: "d" + Math.min(depth, 2) }) + tree(f.id, depth + 1);
     }).join("");
     const un = unsorted().length;
     return `<nav class="nav ${S.navOn ? "" : "off"}" aria-label="メニュー"><div class="nav-list">
-      ${nv("all", "すべて（横断）", ITEMS.length)}
+      ${nv("all", "すべて", ITEMS.length)}
       ${nv("todo", "未分析", cnt(it => stageOf(it) === 0), { c: "var(--accent)", cls: "warn" })}
       ${nv("ai", "Claude に頼んだ分析", cnt(it => it.ai), { c: "var(--k-doc)" })}
       ${un ? nv("unsorted", "未整理（置き場なし）", un, { c: "var(--k-lp)" }) : ""}
       <div class="nh"><span>フォルダ</span><button id="addFolder" aria-label="フォルダを足す" title="フォルダを足す">＋</button></div>
       ${tree(null, 0)}
-    </div><div class="nav-foot">AI から読む入口：<b>swipe-mcp</b>。種類・参考ポイント・評価・ジャンル・分析・ラベルを指定して探す。</div></nav>`;
+    </div></nav>`;
   }
 
   /* ── 本体 ───────────────────────────────────────────── */
@@ -269,16 +275,16 @@ export function startApp(root) {
   function cellHTML(k, it) {
     switch (k) {
       case "grade": return gradeHTML(it);
-      case "shu": return cellPick(it, "shu", it.shu ? `<span class="chip" style="--c:var(--k-doc)">${esc(it.shu)}</span>` : '<span class="num">―</span>');
+      case "shu": return cellPick(it, "shu", it.shu ? `<span class="chip" style="--c:var(--k-doc)">${esc(it.shu)}</span>` : '<span class="ecell"></span>');
       case "ref": return cellPick(it, "ref", chipsHTML(it.ref, "var(--l-kata)"));
       case "genre": return cellPick(it, "genre", chipsHTML(it.genre, "var(--l-yoto)"));
       case "stage": return stageHTML(it);
       case "place": return `<span class="num">${esc(pathOf(it.table).join(" / "))}</span>`;
-      case "metric": return `<span class="num">${esc(metricOf(it))}</span>`;
+      case "metric": { const v = metricOf(it); return v === "―" ? "" : `<span class="num">${esc(v)}</span>`; }
       case "tags": return cellPick(it, "tag", chipsHTML(it.tags, "var(--faint)", 1));
       case "saved": return `<span class="num">${esc(it.saved)}</span>`;
-      case "used": return `<span class="num">${it.used.length ? it.used.length + " 回" : "―"}</span>`;
-      case "shares": { const sh = coll.memberOf("share", it.id); return sh.length ? `<div class="chips">${sh.slice(0, 2).map(v => `<span class="chip" style="--c:var(--accent)">${esc(v.name)}</span>`).join("")}${sh.length > 2 ? `<span class="chip">+${sh.length - 2}</span>` : ""}</div>` : '<span class="num">―</span>'; }
+      case "used": return it.used.length ? `<span class="num">${it.used.length} 回</span>` : "";
+      case "shares": { const sh = coll.memberOf("share", it.id); return sh.length ? `<div class="chips">${sh.slice(0, 2).map(v => `<span class="chip" style="--c:var(--accent)">${esc(v.name)}</span>`).join("")}${sh.length > 2 ? `<span class="chip">+${sh.length - 2}</span>` : ""}</div>` : ""; }
       default: return "";
     }
   }
@@ -292,7 +298,18 @@ export function startApp(root) {
       ${cols.map(k => `<td>${cellHTML(k, it)}</td>`).join("")}</tr>`).join("")}
     </tbody></table></div></div>`;
   }
-  const galHTML = it => `<button class="gcard" data-open="${it.id}">${shotHTML(it)}<div class="g-t">${esc(it.title)}</div><div class="g-ft">${gradeHTML(it, true)}${stageHTML(it)}</div></button>`;
+  // 画像が無いものは、本文の書き出しと言語化を見せる文字のカード（同じ箱を並べない）
+  function textCardHTML(it) {
+    const k = kindOf(it), text = (it.body || it.excerpt || "").trim();
+    const who = [it.author, it.handle].filter(Boolean).join("・");
+    return `<div class="tcard" style="--c:${KINDC[k]}"><span class="tc-k">${esc(it.shu || "種類なし")}${who ? `・${esc(who)}` : ""}</span>${text ? `<p class="tc-b">${esc(text.slice(0, 220))}${text.length > 220 ? "…" : ""}</p>` : it.file ? `<p class="tc-f">${IC.file}${esc(it.file.name || "ファイル")}</p>` : ""}</div>`;
+  }
+  const galHTML = it => `<button class="gcard" data-open="${it.id}">${it.shot ? shotHTML(it) : textCardHTML(it)}<div class="g-t">${esc(it.title)}</div>${it.a.why ? `<div class="g-why">${esc(it.a.why)}</div>` : ""}<div class="g-ft"><span class="chips">${gradeHTML(it, true)}${it.ref.slice(0, 2).map(x => `<span class="chip" style="--c:var(--l-kata)">${esc(x)}</span>`).join("")}</span>${stageHTML(it)}</div></button>`;
+  // スマホの一覧：表ではなく 1 件 1 枚のカードを縦に並べる
+  const mrowHTML = it => `<div class="mrow ${S.sel.has(it.id) ? "sel" : ""}"><input type="checkbox" class="ck" data-ck="${it.id}" ${S.sel.has(it.id) ? "checked" : ""} aria-label="選ぶ">
+      <button class="mrow-b" data-open="${it.id}">${it.shot ? `<img class="mrow-i" src="${esc(it.shot)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}<span class="mrow-w"><span class="nm">${esc(it.title)}</span>${it.a.why || it.excerpt ? `<span class="snip">${esc(it.a.why || it.excerpt)}</span>` : ""}
+        <span class="chips">${gradeHTML(it, true)}${it.shu ? `<span class="chip" style="--c:var(--k-doc)">${esc(it.shu)}</span>` : ""}${it.ref.slice(0, 2).map(x => `<span class="chip" style="--c:var(--l-kata)">${esc(x)}</span>`).join("")}${stageOf(it) ? "" : '<span class="stage none">未分析</span>'}</span>
+        <span class="mrow-p">${esc(pathOf(it.table).join(" / "))}・${esc(it.saved)}</span></span></button></div>`;
   function boardHTML(a, group) {
     let cols;
     if (group === "stage") cols = STAGES.map((n, i) => [n, a.filter(it => stageOf(it) === i)]);
@@ -302,12 +319,12 @@ export function startApp(root) {
   }
   function listHTML() {
     const l = S.loc, inFolder = l.startsWith("f:");
-    let crumb = ["スワイプくん"], title, lead = "";
+    let crumb = [], title, lead = "";
     if (inFolder) {
       const fid = l.slice(2); const ts = CFG.tables.filter(t => t.folder === fid);
       if (!ts.some(t => t.id === S.table)) S.table = ts[0].id;
-      crumb = ["スワイプくん", ...pathOf(S.table).slice(0, -2)]; title = folderOf(fid).name;
-    } else if (l === "all") { title = curView().f.todo ? "未分析" : "すべて（横断）"; lead = curView().f.todo ? "保存はしたが分析が空のもの。" : "全部のフォルダと表をまとめて見る。"; }
+      crumb = pathOf(S.table).slice(0, -2); title = folderOf(fid).name;
+    } else if (l === "all") { title = curView().f.todo ? "未分析" : "すべて"; lead = curView().f.todo ? "保存はしたが分析が空のもの。" : ""; }
     else if (l === "ai") { title = "Claude に頼んだ分析"; lead = "印が付いたものは、次に Claude が道具で読んだときに、空いている段へ下書きを入れる。"; }
     else if (l === "unsorted") { title = "未整理（置き場なし）"; lead = "どの表にも入っていないもの。開いて「場所」から表を選ぶと、ここから消える。"; }
     const a = filtered(), v = curView(), f = { ...v.f, ...S.f };
@@ -315,20 +332,24 @@ export function startApp(root) {
       `<button class="ttab ${t.id === S.table ? "on" : ""}" data-table="${t.id}" title="ダブルクリックで名前を変える">${esc(t.name)}<span class="n">${ITEMS.filter(it => it.table === t.id).length}</span></button>`).join("")}<button class="ttab add" id="addTable" data-folder="${esc(l.slice(2))}">＋ 表</button></div>` : "";
     const vtab = x => `<button class="vtab ${x.id === S.view ? "on" : ""}" data-view="${x.id}">${IC[x.type === "gal" ? "gal" : x.type === "board" ? "board" : "table"]}${esc(x.name)}</button>`;
     const anyF = Object.values(S.f).some(x => x !== "" && x !== undefined && x !== 0) || S.q;
+    const fOn = Object.entries(S.f).filter(([, x]) => x !== "" && x !== undefined && x !== 0);
+    const nF = fOn.length;
+    const fVal = (k, x) => k === "star" ? (GRADE[x] + (+x < 5 ? " 以上" : "")) : k === "stagex" ? STAGES[x] : x;
+    const fChips = fOn.map(([k, x]) => `<button class="fchip" data-frm="${k}" aria-label="${F_NAME[k]}の条件を外す">${F_NAME[k]}：${esc(fVal(k, x))}${IC.x}</button>`).join("");
     let content;
     if (S.loading) content = `<div class="card empty">読み込んでいます…</div>`;
     else if (S.err) content = `<div class="card empty">${esc(S.err)}<br><button class="ghost" id="reload" style="margin-top:10px">もう一度読む</button></div>`;
     else if (!a.length) content = `<div class="card empty">${ITEMS.length ? "当てはまるものはありません。<br>絞り込みを外すか、別のビューを選んでください。" : "まだ 1 件もありません。右上の「＋ 足す」から入れてください。"}</div>`;
     else if (v.type === "gal") content = `<div class="gal">${a.map(galHTML).join("")}</div>`;
     else if (v.type === "board") content = boardHTML(a, v.group);
-    else content = tableHTML(a);
+    else content = isPhone() ? `<div class="mlist">${a.map(mrowHTML).join("")}</div>` : tableHTML(a);
     const colBtn = v.type === "table" ? `<span class="colbtn"><button class="ghost" id="colBtn" aria-expanded="${S.colPop}">列</button>${S.colPop ? colPopHTML() : ""}</span>` : "";
     const moveOpts = CFG.tables.map(t => `<option value="${t.id}">${esc(pathOf(t.id).join(" / "))}</option>`).join("");
     return `<div class="wrap gut">${headHTML(crumb, title, lead)}${tabs}
       <div class="vrow"><div class="vtabs" role="tablist" aria-label="ビュー">${CFG.views.map(vtab).join("")}<button class="vtab" id="addView">＋ ビュー</button></div>
         <label class="lq">${IC.search}<input id="q" placeholder="本文・分析・投稿者で探す" value="${esc(S.q)}" aria-label="探す"></label></div>
-      <div class="frow">${labelSels(S.f, "f")}
-        ${anyF ? `<button class="fclear" id="fClear">絞り込みを外す</button>` : ""}<span class="lsub" style="margin-left:auto">${a.length} 件${f.star || f.todo ? `・ビュー「${esc(v.name)}」の条件つき` : ""}</span>${colBtn}</div>
+      <div class="frow"><span class="fwrap"><button class="ghost fbtn ${nF ? "on" : ""}" id="fBtn" aria-expanded="${S.fPop}">${IC.filter}絞り込み${nF ? ` <b>${nF}</b>` : ""}</button>${S.fPop ? `<div class="fpop" role="dialog" aria-label="絞り込み">${labelSels(S.f, "f")}</div>` : ""}</span>
+        ${fChips}${anyF ? `<button class="fclear" id="fClear">外す</button>` : ""}<span class="lsub" style="margin-left:auto">${a.length} 件${f.star || f.todo ? `・ビュー「${esc(v.name)}」の条件つき` : ""}</span>${colBtn}</div>
       ${S.sel.size ? `<div class="bulk"><span>${S.sel.size} 件を選択中</span><select id="bulkMove" aria-label="移す先"><option value="">表へ移す…</option>${moveOpts}</select>
         <select id="bulkPack" aria-label="入れる素材パック"><option value="">素材パックに入れる…</option>${coll.DATA.pack.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}<option value="new">＋ 新しい素材パック</option></select>
         <select id="bulkShare" aria-label="入れる共有ページ"><option value="">共有ページに入れる…</option>${coll.DATA.share.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}<option value="new">＋ 新しい共有ページ</option></select>
@@ -571,6 +592,9 @@ export function startApp(root) {
     if (!screen.contains(t)) return;
     if (S.scr !== "app") { if (q("#navBtn")) { S.navOn = !S.navOn; render(); return; } coll.onClick(S.scr, t); return; }
     let closed = false; if (!q(".colbtn") && S.colPop) { S.colPop = false; closed = true; }
+    if (!q(".fwrap") && S.fPop) { S.fPop = false; closed = true; }
+    if (q("#fBtn")) { S.fPop = !S.fPop; render(); return; }
+    if (b = q("[data-frm]")) { delete S.f[b.dataset.frm]; render(); return; }
     if (b = q("[data-cpv]")) {
       const P = S.cellPop, it = ITEMS.find(x => x.id === P.id), v = b.dataset.cpv;
       if (P.key === "shu") { it.shu = it.shu === v ? "" : v; S.cellPop = null; }
@@ -733,11 +757,12 @@ export function startApp(root) {
     }
     if (e.key === "Escape" && S.lb) { S.lb = null; render(); return; }
     if (e.key === "Escape" && S.scr !== "app") { if (coll.onEscape()) render(); return; }
-    if (e.key === "Escape") { if (S.modal && !S.add?.busy) { S.modal = null; S.add = null; render(); } else if (S.cellPop) { S.cellPop = null; render(); } else if (S.colPop) { S.colPop = false; render(); } else if (S.open) { S.open = null; render(); } } };
+    if (e.key === "Escape") { if (S.modal && !S.add?.busy) { S.modal = null; S.add = null; render(); } else if (S.cellPop) { S.cellPop = null; render(); } else if (S.colPop) { S.colPop = false; render(); } else if (S.fPop) { S.fPop = false; render(); } else if (S.open) { S.open = null; render(); } } };
   screen.addEventListener("scroll", () => placeCellPop(), true);
   // 畳んだ欄の開け閉めを覚える（描き直しても開いたまま）
   screen.addEventListener("toggle", e => { const d = e.target; if (d?.dataset?.fold) { d.open ? S.fold.add(d.dataset.fold) : S.fold.delete(d.dataset.fold); } }, true);
-  addEventListener("resize", () => placeCellPop());
+  let wasPhone = isPhone();
+  addEventListener("resize", () => { placeCellPop(); if (isPhone() !== wasPhone) { wasPhone = isPhone(); render(); } });
   document.addEventListener("paste", onPaste);
   document.addEventListener("keydown", onKey);
 
