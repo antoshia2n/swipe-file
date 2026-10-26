@@ -134,7 +134,7 @@ export function startPanel(root) {
     const Y = S.yt, d = Y.data || {}, og = Y.og || {};
     const title = d.title || og.title || P.ogTitle || P.title || P.url;
     const who = [d.channel || og.author, d.len ? D.fmtTime(d.len) : ""].filter(Boolean).join("・");
-    const chars = (d.lines || []).reduce((n, l) => n + l[1].length, 0);
+    const chars = D.cleanTranscript(d.lines || []).reduce((n, l) => n + l[1].length, 0);
     const st = {
       wait: ["wait", "文字起こしを読んでいます…"],
       ok: ["ok", `文字起こし：取れた（${d.cap || "字幕"}・${chars.toLocaleString()} 字）`],
@@ -154,7 +154,7 @@ export function startPanel(root) {
     const P = S.page, Y = S.yt, d = Y.data || {}, og = Y.og || {};
     const short = /\/shorts\//.test(P.url);
     const url = short ? `https://www.youtube.com/shorts/${Y.id}` : `https://www.youtube.com/watch?v=${Y.id}`;
-    const lines = d.lines || [];
+    const lines = D.cleanTranscript(d.lines || []);
     const props = { yt: { id: Y.id, len: d.len || 0, cap: lines.length ? (d.cap || "字幕") : "", ...(short ? { short: true } : {}) } };
     const ogp = { title: d.title || og.title || P.ogTitle || "", description: "", image: D.ytThumb(Y.id), author: d.channel || og.author || "" };
     const table = S.table || autoTable({ isX: false, url });
