@@ -47,6 +47,26 @@ export function fmtTime(sec) {
   return h ? `${h}:${String(m).padStart(2, "0")}:${r}` : `${m}:${r}`;
 }
 const toSec = t => t.split(":").reduce((a, v) => a * 60 + (+v), 0);
+/**
+ * 自動字幕の「流れる字幕」は、同じ文が前の行と重なって 2 回ずつ届く。読める形に直す。
+ * ①行の中ですぐ続けて繰り返す 10 字以上のかたまりを 1 つにする
+ * ②行の頭が、それまでの文の終わりと重なる分を外す（まるごと重なる行は捨てる）
+ */
+export function cleanTranscript(lines) {
+  const out = []; let tail = "";
+  for (const [s, raw] of lines) {
+    let t = String(raw || "");
+    for (let i = 0; i < 5; i++) { const n = t.replace(/(.{10,}?)\1/g, "$1"); if (n === t) break; t = n; }
+    let k = 0;
+    for (let j = Math.min(t.length, tail.length, 400); j >= 1; j--) {
+      if ((j >= 5 || j === t.length) && tail.endsWith(t.slice(0, j))) { k = j; break; }
+    }
+    t = t.slice(k).replace(/^[\s。、，．,.!?！？]+/, "").trim();
+    if (!t) continue;
+    out.push([s, t]); tail = (tail + t).slice(-600);
+  }
+  return out;
+}
 /** 文字起こしは本文に「0:31 話したこと」の行で入れる。検索・線・素材パックがそのまま効く */
 export const transcriptBody = lines => lines.map(([s, t]) => `${fmtTime(s)} ${t}`).join("\n");
 /** 本文が文字起こしの形なら [{ s:秒, t:時刻, x:文 }] を返す。違えば null */
