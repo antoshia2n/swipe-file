@@ -29,7 +29,34 @@ export function jstParts(iso) {
   return { y, m, d: dd };
 }
 export const shortDate = iso => { const p = jstParts(iso); return `${+p.m}/${+p.d}`; };
-export const monthTableId = iso => { const p = jstParts(iso); return `x-${p.y}-${p.m}`; };
+/** 月の表の ID。X は x-2026-10、YouTube は yt-2026-10 */
+export const monthTableId = (iso, kind = "x") => { const p = jstParts(iso); return `${kind}-${p.y}-${p.m}`; };
+
+/* ── YouTube（5便目） ─────────────────────────────────── */
+/** 動画の番号（11 字）。watch?v= ・youtu.be/ ・shorts/ ・embed/ ・live/ に対応。取れなければ "" */
+export function ytId(url = "") {
+  const u = String(url || "");
+  if (!/youtube\.com|youtu\.be/i.test(u)) return "";
+  const m = /[?&]v=([\w-]{11})/.exec(u) || /youtu\.be\/([\w-]{11})/.exec(u) || /youtube\.com\/(?:shorts|embed|live)\/([\w-]{11})/.exec(u);
+  return m ? m[1] : "";
+}
+export const ytThumb = id => `https://i.ytimg.com/vi/${id}/hqdefault.jpg`;
+/** 秒 → 0:31 / 1:02:03 */
+export function fmtTime(sec) {
+  const s = Math.max(0, Math.floor(+sec || 0)), h = Math.floor(s / 3600), m = Math.floor((s % 3600) / 60), r = String(s % 60).padStart(2, "0");
+  return h ? `${h}:${String(m).padStart(2, "0")}:${r}` : `${m}:${r}`;
+}
+const toSec = t => t.split(":").reduce((a, v) => a * 60 + (+v), 0);
+/** 文字起こしは本文に「0:31 話したこと」の行で入れる。検索・線・素材パックがそのまま効く */
+export const transcriptBody = lines => lines.map(([s, t]) => `${fmtTime(s)} ${t}`).join("\n");
+/** 本文が文字起こしの形なら [{ s:秒, t:時刻, x:文 }] を返す。違えば null */
+export function parseTranscript(body = "") {
+  const rows = String(body || "").split("\n").filter(l => l.trim());
+  if (rows.length < 2) return null;
+  const out = [];
+  for (const l of rows) { const m = /^(\d{1,2}:\d{2}(?::\d{2})?)\s+(.*)$/.exec(l.trim()); if (m) out.push({ s: toSec(m[1]), t: m[1], x: m[2] }); }
+  return out.length >= Math.max(2, rows.length * 0.6) ? out : null;
+}
 
 /* ── 媒体の見分け（旧アプリと同じ規則） ───────────────────── */
 export function detectSourceType(url = "", { hasBody = false, isPdf = false } = {}) {
@@ -301,6 +328,8 @@ export function sameKey(url) {
   if (!u) return "";
   const x = /(?:x|twitter)\.com\/[^/]+\/status\/(\d+)/i.exec(u);
   if (x) return "x:" + x[1];
+  const y = ytId(u);
+  if (y) return "yt:" + y; // youtu.be と watch?v= を同じ動画として見る（? を外すと全部の動画が同じになるため）
   return u.replace(/^https?:\/\//i, "").replace(/^www\./i, "").replace(/[?#].*$/, "").replace(/\/+$/, "").toLowerCase();
 }
 export const findSame = (items, url) => { const k = sameKey(url); return k ? items.find(it => sameKey(it.url) === k) : null; };

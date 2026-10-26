@@ -6,6 +6,7 @@
  *   hello                 … 拡張機能の中で開かれているかの確認
  *   peek                  … いま見ているページの情報（X ならポストとスレッド）。撮らない
  *   grab { mode, thread } … 情報＋スクショ。mode は post（ポストだけ）／screen（見えている範囲）／crop（範囲をなぞる）
+ *   yt                    … YouTube の動画の題名・チャンネル・長さ・文字起こし（1.1.0 から）
  * ここ → 画面：{ src: "swipe-kun-ext", type: "reply", id, ok, data | error } と、タブが変わったときの { type: "tab" }
  */
 const frame = document.getElementById("app");
@@ -104,6 +105,105 @@ function pickArea() {
   });
 }
 
+/**
+ * YouTube の動画を読む（ページの中で動く）。
+ * 文字起こしは 3 つの道を順に試す：①字幕の住所（timedtext）②YouTube の文字起こしの口（get_transcript）
+ * ③画面の「文字起こしを表示」を開いて読む。どれも Naoki が開いているページの中から取るので、外から取るより確実。
+ * 戻り値 { id, title, channel, len, cap, lines: [[秒, 文], ...], how, err }
+ */
+async function readYouTube() {
+  const id = (location.pathname.match(/^\/(?:shorts|live)\/([\w-]{11})/) || [])[1] || new URLSearchParams(location.search).get("v") || "";
+  const out = { id, title: "", channel: "", len: 0, cap: "", lines: [], how: "", err: "" };
+  if (!/^[\w-]{11}$/.test(id)) { out.err = "動画の番号が見つかりません"; return out; }
+  const wait = ms => new Promise(r => setTimeout(r, ms));
+  // HTML の中の「名前 = {…}」の {…} を取り出す（文字列の中の括弧は数えない）
+  const objAfter = (html, marker) => {
+    const at = html.indexOf(marker); if (at < 0) return null;
+    const st = html.indexOf("{", at); if (st < 0) return null;
+    let depth = 0, inStr = false, esc = false;
+    for (let i = st; i < html.length; i++) {
+      const c = html[i];
+      if (inStr) { if (esc) esc = false; else if (c === "\\") esc = true; else if (c === '"') inStr = false; continue; }
+      if (c === '"') inStr = true; else if (c === "{") depth++; else if (c === "}" && --depth === 0) { try { return JSON.parse(html.slice(st, i + 1)); } catch { return null; } }
+    }
+    return null;
+  };
+  const runsText = r => (r?.runs || []).map(x => x.text || "").join("") || r?.simpleText || "";
+  const pieces = []; // [[秒, 文の切れ端], ...]
+  let html = "";
+  try { html = await (await fetch(`/watch?v=${id}&hl=ja`, { credentials: "include" })).text(); } catch { /* 下の道へ */ }
+  const pr = objAfter(html, "ytInitialPlayerResponse = ") || {};
+  const vd = pr.videoDetails || {};
+  out.title = vd.title || ""; out.channel = vd.author || ""; out.len = +vd.lengthSeconds || 0;
+
+  // ① 字幕の住所。手で付けた日本語 → 自動字幕の日本語 → 手で付けたほかの言語 → 最初のもの
+  const tracks = pr.captions?.playerCaptionsTracklistRenderer?.captionTracks || [];
+  const ja = t => /^ja/.test(t.languageCode || "");
+  const track = tracks.find(t => ja(t) && t.kind !== "asr") || tracks.find(ja) || tracks.find(t => t.kind !== "asr") || tracks[0];
+  if (track?.baseUrl) {
+    try {
+      const txt = await (await fetch(track.baseUrl + "&fmt=json3", { credentials: "include" })).text();
+      if (txt.trim()) {
+        for (const ev of JSON.parse(txt).events || []) {
+          const t = (ev.segs || []).map(x => x.utf8 || "").join("");
+          if (t.trim()) pieces.push([(ev.tStartMs || 0) / 1000, t]);
+        }
+      }
+    } catch { /* 下の道へ */ }
+    if (pieces.length) { out.how = "timedtext"; out.cap = track.kind === "asr" ? "自動字幕" : "字幕"; }
+  }
+
+  // ② YouTube の文字起こしの口
+  if (!pieces.length && html) {
+    const params = (html.match(/"getTranscriptEndpoint":\{"params":"([^"]+)"/) || [])[1];
+    const key = (html.match(/"INNERTUBE_API_KEY":"([^"]+)"/) || [])[1];
+    const ver = (html.match(/"INNERTUBE_CLIENT_VERSION":"([^"]+)"/) || [])[1] || "2.20250101.00.00";
+    if (params) {
+      try {
+        const res = await fetch(`/youtubei/v1/get_transcript?prettyPrint=false${key ? "&key=" + key : ""}`, {
+          method: "POST", credentials: "include", headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ context: { client: { clientName: "WEB", clientVersion: ver, hl: "ja" } }, params }),
+        });
+        const walk = o => { if (!o || typeof o !== "object") return; if (o.transcriptSegmentRenderer) { const r = o.transcriptSegmentRenderer; const t = runsText(r.snippet); if (t.trim()) pieces.push([(+r.startMs || 0) / 1000, t]); return; } for (const k in o) walk(o[k]); };
+        if (res.ok) walk(await res.json());
+      } catch { /* 下の道へ */ }
+      if (pieces.length) { out.how = "transcript"; out.cap = "文字起こし"; }
+    }
+  }
+
+  // ③ 画面の「文字起こしを表示」を開いて読む（いま開いている動画と同じときだけ）
+  const curId = (location.pathname.match(/^\/(?:shorts|live)\/([\w-]{11})/) || [])[1] || new URLSearchParams(location.search).get("v");
+  if (!pieces.length && curId === id) {
+    const segs = () => document.querySelectorAll("ytd-transcript-segment-renderer");
+    if (!segs().length) {
+      const btn = document.querySelector("ytd-video-description-transcript-section-renderer button")
+        || [...document.querySelectorAll("button")].find(b => /文字起こしを表示|Show transcript/i.test(b.innerText || b.getAttribute("aria-label") || ""));
+      btn?.click();
+      for (let i = 0; i < 30 && !segs().length; i++) await wait(200);
+    }
+    for (const el of segs()) {
+      const ts = (el.querySelector(".segment-timestamp")?.innerText || "").trim();
+      const t = (el.querySelector(".segment-text")?.innerText || "").trim();
+      if (!ts || !t) continue;
+      pieces.push([ts.split(":").reduce((a, v) => a * 60 + (+v || 0), 0), t]);
+    }
+    if (pieces.length) { out.how = "screen"; out.cap = "文字起こし"; }
+  }
+  if (!pieces.length) { out.err = tracks.length ? "字幕はあるが読めませんでした" : "この動画には字幕がありません"; return out; }
+
+  // 切れ端を、文の終わり（。！？）か 90 字か 30 秒で 1 行にまとめる
+  const clean = t => t.replace(/\s*\n\s*/g, " ").replace(/\s+/g, " ").replace(/([\u3000-\u9fff\uff00-\uffef])\s+(?=[\u3000-\u9fff\uff00-\uffef])/g, "$1").trim();
+  let cur = null;
+  for (const [sec, raw] of pieces.sort((a, b) => a[0] - b[0])) {
+    const t = clean(raw); if (!t) continue;
+    if (!cur) cur = [sec, t];
+    else cur[1] = clean(cur[1] + (/[A-Za-z0-9]$/.test(cur[1]) && /^[A-Za-z0-9]/.test(t) ? " " : " ") + t);
+    if (/[。！？!?]$/.test(cur[1]) || cur[1].length >= 90 || sec - cur[0] >= 30) { out.lines.push([Math.floor(cur[0]), cur[1]]); cur = null; }
+  }
+  if (cur) out.lines.push([Math.floor(cur[0]), cur[1]]);
+  return out;
+}
+
 /* ── 撮る・切り抜く ──────────────────────────────────── */
 
 let lastShot = 0;
@@ -172,6 +272,7 @@ addEventListener("message", async e => {
     if (m.type === "hello") return reply(true, { data: { version: VERSION } });
     if (m.type === "peek") { const tab = await activeTab(); return reply(true, { data: await run(tab, readPage) }); }
     if (m.type === "grab") return reply(true, { data: await grab(m) });
+    if (m.type === "yt") { const tab = await activeTab(); return reply(true, { data: await run(tab, readYouTube) }); }
     reply(false, { error: "知らない頼みです" });
   } catch (err) {
     reply(false, { error: String(err?.message || err) });

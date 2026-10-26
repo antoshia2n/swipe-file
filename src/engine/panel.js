@@ -26,6 +26,7 @@ export function startPanel(root) {
     mode: store.get("swipe.pn.mode", "post"), thread: true,
     grade: 0, refs: new Set(store.get("swipe.pn.refs", [])), memo: "", table: "",
     busy: false, file: null, fileObj: null, items: [], cfg: null, saved: null,
+    yt: null, // YouTube を見ているとき { id, state: wait|ok|none|old, data, og }
   };
   root.innerHTML = `<div id="app" class="pn-app"><div class="pn-bar"><div class="brand" style="font-size:14px">スワイプくん<span>.</span></div><span class="lsub" id="pnState" style="margin-left:auto"></span><a class="ghost" href="/" target="_blank" rel="noopener">一覧を開く</a></div><div class="pn" id="pn"></div></div><div class="toast" id="toast" hidden></div>`;
   const $ = s => root.querySelector(s);
@@ -56,15 +57,33 @@ export function startPanel(root) {
     if (!S.ext) return;
     try { S.page = await ask("peek", {}, 8000); S.err = ""; }
     catch (e) { S.page = null; S.err = e.message; }
-    S.thread = true; render();
+    S.thread = true;
+    const id = D.ytId(S.page?.url);
+    if (!id) S.yt = null; else if (S.yt?.id !== id) loadYt(id, S.page.url);
+    render();
+  }
+
+  /* ── YouTube：題名・長さ・文字起こしを拡張機能に読んでもらう（5便目） ── */
+  async function loadYt(id, url) {
+    S.yt = { id, state: "wait", data: null, og: null };
+    const [r, og] = await Promise.all([
+      ask("yt", {}, 30000).then(d => ({ d }), e => ({ e: e.message })),
+      D.fetchOgp(url),
+    ]);
+    if (S.yt?.id !== id) return; // 読んでいる間に別の動画へ移った
+    S.yt.og = og;
+    if (r.e) S.yt.state = /知らない頼み/.test(r.e) ? "old" : "none";
+    else { S.yt.data = r.d; S.yt.state = r.d?.lines?.length ? "ok" : "none"; }
+    render();
   }
 
   /* ── 置き場とラベル ───────────────────────────────── */
   const tables = () => (S.cfg?.tables || []);
-  const tableName = id => { const t = tables().find(x => x.id === id); if (!t) { const m = /^x-(\d{4})-(\d{2})$/.exec(id || ""); return m ? `Xポスト / ${m[1]}年 / ${+m[2]}月` : "未整理"; } const fs = S.cfg.folders || []; const p = []; let f = fs.find(x => x.id === t.folder); while (f) { p.unshift(f.name); f = fs.find(x => x.id === f.parent); } return [...p, t.name].join(" / "); };
+  const tableName = id => { const t = tables().find(x => x.id === id); if (!t) { const m = /^(x|yt)-(\d{4})-(\d{2})$/.exec(id || ""); return m ? `${m[1] === "x" ? "Xポスト" : "YouTube"} / ${m[2]}年 / ${+m[3]}月` : "未整理"; } const fs = S.cfg.folders || []; const p = []; let f = fs.find(x => x.id === t.folder); while (f) { p.unshift(f.name); f = fs.find(x => x.id === f.parent); } return [...p, t.name].join(" / "); };
   const refList = () => [...new Set([...(S.cfg?.labels?.ref || REF_DEFAULT), ...S.items.flatMap(i => i.ref)])];
   function autoTable({ isX, url, isPdf }) {
     if (isX) return D.monthTableId();
+    if (D.ytId(url)) return D.monthTableId(undefined, "yt");
     if (/note\.com\//.test(url || "") && tables().some(t => t.id === "t-note")) return "t-note";
     if (isPdf && tables().some(t => t.id === "t-lp-pdf")) return "t-lp-pdf";
     return "";
@@ -86,6 +105,7 @@ export function startPanel(root) {
     if (S.loading && !S.page) return `<div class="box"><div class="box-h">見ているページを読んでいます…</div></div>`;
     if (!S.page) return `<div class="box"><div class="box-h">見ているページを保存</div><div class="warnline">${esc(S.err || "このページは読めません")}</div><button class="ghost" id="pnRetry">もう一度読む</button></div>`;
     const P = S.page, X = P.x;
+    if (S.yt) return ytBox(P);
     // 同じポスト・ページがもう保存されていたら知らせる（二重に保存しないため。保存は止めない）
     const dup = D.findSame(S.items, X ? `https://x.com/${X.main.handle}/status/${X.main.id}` : P.url);
     const dupLine = dup ? `<div class="dup">保存済み（${esc(dup.saved)}・${esc(tableName(dup.table))}）<a class="ghost" href="/?open=${encodeURIComponent(dup.id)}" target="_blank" rel="noopener">開く</a></div>` : "";
@@ -109,6 +129,36 @@ export function startPanel(root) {
       <div><div class="dt-h">スクショの撮り方</div><div class="cap" style="grid-template-columns:repeat(2,1fr)">${capBtn("screen", "見えている範囲")}${capBtn("crop", "範囲を選ぶ")}</div><div class="dt-h" style="margin:6px 0 0;font-weight:500">${capNote[mode]}　ページ全体は GoFullPage で撮って下へ落とす。</div></div>
       ${fieldsHTML(false, P.url)}
       <button class="ink save" id="pnSave" ${S.busy ? "disabled" : ""}>${S.busy ? "保存しています…" : dup ? "もう一度保存する" : "保存する"}</button></div>`;
+  }
+  function ytBox(P) {
+    const Y = S.yt, d = Y.data || {}, og = Y.og || {};
+    const title = d.title || og.title || P.ogTitle || P.title || P.url;
+    const who = [d.channel || og.author, d.len ? D.fmtTime(d.len) : ""].filter(Boolean).join("・");
+    const chars = (d.lines || []).reduce((n, l) => n + l[1].length, 0);
+    const st = {
+      wait: ["wait", "文字起こしを読んでいます…"],
+      ok: ["ok", `文字起こし：取れた（${d.cap || "字幕"}・${chars.toLocaleString()} 字）`],
+      none: ["warn", "この動画は字幕が無いか、文字起こしを読めませんでした。題名・サムネ・長さだけ保存します（本文はあとで貼れる）"],
+      old: ["warn", "文字起こしも取るには、拡張機能を新しい版へ入れ替えてください。今は題名とサムネだけ保存します"],
+    }[Y.state];
+    const dup = D.findSame(S.items, P.url);
+    const dupLine = dup ? `<div class="dup">保存済み（${esc(dup.saved)}・${esc(tableName(dup.table))}）<a class="ghost" href="/?open=${encodeURIComponent(dup.id)}" target="_blank" rel="noopener">開く</a></div>` : "";
+    const wait = Y.state === "wait";
+    return `<div class="box"><div class="box-h">この動画を保存<span>YouTube</span></div>${dupLine}
+      <div class="yt-card"><img src="${esc(D.ytThumb(Y.id))}" alt="" referrerpolicy="no-referrer"><div><div class="xs-n" style="font-size:13.5px">${esc(title)}</div>${who ? `<div class="xs-u">${esc(who)}</div>` : ""}</div></div>
+      <div class="yt-st ${st[0]}">${esc(st[1])}</div>
+      ${fieldsHTML(false, P.url)}
+      <button class="ink save" id="pnSave" ${S.busy || wait ? "disabled" : ""}>${S.busy ? "保存しています…" : wait ? "文字起こしを待っています…" : dup ? "もう一度保存する" : "保存する"}</button></div>`;
+  }
+  async function saveYt() {
+    const P = S.page, Y = S.yt, d = Y.data || {}, og = Y.og || {};
+    const short = /\/shorts\//.test(P.url);
+    const url = short ? `https://www.youtube.com/shorts/${Y.id}` : `https://www.youtube.com/watch?v=${Y.id}`;
+    const lines = d.lines || [];
+    const props = { yt: { id: Y.id, len: d.len || 0, cap: lines.length ? (d.cap || "字幕") : "", ...(short ? { short: true } : {}) } };
+    const ogp = { title: d.title || og.title || P.ogTitle || "", description: "", image: D.ytThumb(Y.id), author: d.channel || og.author || "" };
+    const table = S.table || autoTable({ isX: false, url });
+    return D.createItem({ url, body: D.transcriptBody(lines), ogp, props, why: S.memo, table, grade: S.grade, refs: [...S.refs] });
   }
   function dropBox() {
     const F = S.file;
@@ -140,6 +190,7 @@ export function startPanel(root) {
   async function savePage() {
     if (S.busy || !S.page) return;
     S.busy = true; render();
+    if (S.yt) { try { const it = await saveYt(); S.saved = S.page.url; afterSave(it); } catch (e) { S.busy = false; render(); toast(e.message); } return; }
     try {
       const g = await ask("grab", { mode: S.page.x ? S.mode : (S.mode === "post" ? "screen" : S.mode), thread: S.thread }, 90000);
       const shotUrl = await D.uploadFile(await dataUrlToFile(g.shot, "shot.png"));

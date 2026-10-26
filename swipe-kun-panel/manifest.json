@@ -1,8 +1,8 @@
 {
   "manifest_version": 3,
   "name": "スワイプくんパネル",
-  "description": "見ているページ（X のポスト・スレッド・販売ページなど）を、サイドパネルからスワイプくんに保存する",
-  "version": "1.0.0",
+  "description": "見ているページ（X のポスト・スレッド・YouTube の動画・販売ページなど）を、サイドパネルからスワイプくんに保存する",
+  "version": "1.1.0",
   "minimum_chrome_version": "116",
   "permissions": ["sidePanel", "scripting", "tabs", "activeTab"],
   "host_permissions": ["<all_urls>"],
