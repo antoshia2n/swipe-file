@@ -105,6 +105,40 @@ export function startApp(root) {
   </div><div class="toast" id="toast" hidden></div>`;
   const $ = (s, el = root) => el.querySelector(s);
   const screen = $("#screen");
+  /* ── YouTube の埋め込み（5便目） ─────────────────────────
+     画面は描き直すたびに中身を作り直す。動画の枠まで作り直すと再生が止まるので、
+     描き直しの間だけ外の置き場へ移して戻す（moveBefore なら再生したまま移せる） */
+  const ytHold = document.createElement("div"); ytHold.hidden = true; document.body.appendChild(ytHold);
+  const mv = (parent, el) => (parent.moveBefore ? parent.moveBefore(el, null) : parent.appendChild(el));
+  let ytT = -1; // いま再生している位置（秒）
+  const ytPost = msg => screen.querySelector("#ytf")?.contentWindow?.postMessage(JSON.stringify(msg), "*");
+  const ytCmd = (func, args = []) => ytPost({ event: "command", func, args });
+  function mountYt(old) {
+    const slot = screen.querySelector("#ytslot");
+    if (!slot) { old?.remove(); return; }
+    if (old && old.dataset.v === slot.dataset.v) { mv(slot, old); return; }
+    old?.remove(); ytT = -1;
+    const v = slot.dataset.v;
+    slot.innerHTML = `<iframe id="ytf" data-v="${esc(v)}" src="https://www.youtube.com/embed/${encodeURIComponent(v)}?enablejsapi=1&rel=0&playsinline=1&origin=${encodeURIComponent(location.origin)}" title="YouTube の動画" allow="autoplay; encrypted-media; picture-in-picture; fullscreen" allowfullscreen></iframe>`;
+    slot.firstElementChild.addEventListener("load", () => ytPost({ event: "listening", id: "ytf", channel: "widget" }));
+  }
+  function markNow(follow) {
+    const box = screen.querySelector("#bodyText.tr"); if (!box) return;
+    let cur = null;
+    for (const l of box.querySelectorAll(".ln")) { if (+l.dataset.s <= ytT + 0.3) cur = l; else break; }
+    const was = box.querySelector(".ln.now");
+    if (was === cur) return;
+    was?.classList.remove("now"); cur?.classList.add("now");
+    // なぞっている途中は動かさない
+    if (follow && cur && (getSelection()?.isCollapsed ?? true)) box.scrollTop = cur.offsetTop - box.offsetTop - 8;
+  }
+  function onYtMsg(e) {
+    if (!/^https:\/\/www\.youtube(-nocookie)?\.com$/.test(e.origin)) return;
+    let d; try { d = typeof e.data === "string" ? JSON.parse(e.data) : e.data; } catch { return; }
+    const t = d?.info?.currentTime; if (typeof t !== "number") return;
+    ytT = t; markNow(true);
+  }
+  addEventListener("message", onYtMsg);
 
   function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => (t.hidden = true), 3200); }
   function toastUndo(msg) { const t = $("#toast"); t.innerHTML = `<span>${esc(msg)}</span><button id="toastUndo" class="tundo">元に戻す</button>`; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => (t.hidden = true), 6000); }
@@ -136,16 +170,18 @@ export function startApp(root) {
   const kindOf = it => { const r = rootOf(it.table); if (r === "f-mine") return "doc"; if (it.shu === "ポスト" || r === "f-x") return "x"; if (it.shu === "記事" || r === "f-note") return "note"; return "lp"; };
   const unsorted = () => ITEMS.filter(it => !tableOf(it.table));
 
-  /** X の月の表（x-2026-10）が無ければ、年のフォルダと一緒に作る */
+  /** 月の表（X は x-2026-10、YouTube は yt-2026-10）が無ければ、年のフォルダと一緒に作る */
+  const MONTH_ROOT = { x: { id: "f-x", name: "Xポスト" }, yt: { id: "f-yt", name: "YouTube" } };
   function ensureMonth(tid) {
-    const m = /^x-(\d{4})-(\d{2})$/.exec(tid || "");
+    const m = /^(x|yt)-(\d{4})-(\d{2})$/.exec(tid || "");
     if (!m || tableOf(tid)) return false;
-    const fid = `f-x-${m[1]}`;
-    if (!folderOf("f-x")) CFG.folders.unshift({ id: "f-x", name: "Xポスト", parent: null });
-    if (!folderOf(fid)) CFG.folders.push({ id: fid, name: `${m[1]}年`, parent: "f-x" });
-    CFG.tables.push({ id: tid, name: `${+m[2]}月`, folder: fid });
-    CFG.tables.sort((a, b) => (/^x-/.test(a.id) && /^x-/.test(b.id) ? b.id.localeCompare(a.id) : 0));
-    CFG.folders.sort((a, b) => (/^f-x-/.test(a.id) && /^f-x-/.test(b.id) ? b.id.localeCompare(a.id) : 0));
+    const [, k, y, mo] = m, R = MONTH_ROOT[k], fid = `${R.id}-${y}`;
+    if (!folderOf(R.id)) { if (k === "x") CFG.folders.unshift({ id: R.id, name: R.name, parent: null }); else CFG.folders.push({ id: R.id, name: R.name, parent: null }); }
+    if (!folderOf(fid)) CFG.folders.push({ id: fid, name: `${y}年`, parent: R.id });
+    CFG.tables.push({ id: tid, name: `${+mo}月`, folder: fid });
+    const same = (a, b, re) => re.test(a.id) && re.test(b.id);
+    CFG.tables.sort((a, b) => (same(a, b, /^x-/) || same(a, b, /^yt-/) ? b.id.localeCompare(a.id) : 0));
+    CFG.folders.sort((a, b) => (same(a, b, /^f-x-/) || same(a, b, /^f-yt-/) ? b.id.localeCompare(a.id) : 0));
     return true;
   }
   const labelList = key => {
@@ -447,7 +483,13 @@ export function startApp(root) {
     const fold = (key, title, count, inner) => `<details class="fold" data-fold="${key}" ${S.fold.has(key) ? "open" : ""}><summary><span class="chev">${IC.down}</span>${esc(title)}${count !== undefined ? `<span class="n">${count}</span>` : ""}</summary><div class="fold-b">${inner}</div></details>`;
     const m = it.m || {};
     const nums = [m.like && (String(m.like).startsWith("スキ") ? m.like : "いいね " + m.like), m.rt && "RT " + m.rt, m.view && "表示 " + m.view].filter(Boolean).join("・");
-    const meta = [it.author, it.handle, `保存 ${it.saved}`, nums].filter(Boolean).map(esc).join('<span class="dot">・</span>');
+    const yid = D.ytId(it.url), yp = it.props?.yt || {};
+    const tr = yid ? D.parseTranscript(it.body) : null;
+    const ytInfo = yid ? [yp.len ? `長さ ${D.fmtTime(yp.len)}` : "", tr ? `${yp.cap || "文字起こし"}・${tr.reduce((n, l) => n + l.x.length, 0).toLocaleString()} 字` : "文字起こしなし"] : [];
+    const meta = [it.author, yid ? "" : it.handle, ...ytInfo, `保存 ${it.saved}`, nums].filter(Boolean).map(esc).join('<span class="dot">・</span>');
+    const markText = x => { let h = esc(x); it.hl.forEach(m => { if (!m.t) return; const e = esc(m.t); if (e && h.includes(e)) h = h.split(e).join(`<mark class="hl" title="${esc(m.r)}">${e}</mark>`); }); return h; };
+    const hlTime = h => { if (!tr || !h.t) return ""; const l = tr.find(l => l.x.includes(h.t)); return l ? `<button class="tsc" data-seek="${l.s}" aria-label="${l.t} から再生">${l.t}</button>` : ""; };
+    const hlBar = `<div class="hlbar"><select class="lsel" id="hlRef" aria-label="線の参考ポイント">${labelList("ref").map(r => `<option>${esc(r)}</option>`).join("")}</select><button class="ghost" id="hlAdd">なぞったところに線を引く</button></div>`;
     const n = stageOf(it);
     const tableOpts = `${tableOf(it.table) ? "" : `<option value="" selected>未整理</option>`}${CFG.tables.map(t => `<option value="${t.id}" ${t.id === it.table ? "selected" : ""}>${esc(pathOf(t.id).join(" / "))}</option>`).join("")}`;
     const exf = it.shu && EXF[it.shu] ? fold("ex", `${it.shu}の欄`, undefined, `<div class="exg">${EXF[it.shu].map(k => `<label>${esc(k)}<input data-ex="${esc(k)}" value="${esc(it.ex[k] || "")}"></label>`).join("")}</div>`) : "";
@@ -480,12 +522,11 @@ export function startApp(root) {
      ${meta ? `<div class="dt-meta">${meta}</div>` : ""}
      <div class="dt-body dt-cols">
       <section class="dt-src">
-        ${it.shot ? shotView(it) : ""}${isPdf(it) ? `<div class="pdfv"><iframe src="${esc(it.file.url)}#view=FitH" title="PDF" loading="lazy"></iframe><button class="ghost" data-lbopen="pdf">大きく開く・印を付ける</button></div>` : ""}${it.file ? `<a class="filelink" href="${esc(it.file.url)}" target="_blank" rel="noopener">${IC.file}${esc(it.file.name || "ファイルを開く")}${it.file.pages ? `（${esc(it.file.pages)} ページ）` : ""}</a>` : ""}
-        ${it.body ? `<div><div class="dt-h">本文<span>なぞって線を引ける</span></div><div class="dt-v" id="bodyText" style="white-space:pre-wrap">${hlBody(it)}</div>
-          <div class="hlbar"><select class="lsel" id="hlRef" aria-label="線の参考ポイント">${labelList("ref").map(r => `<option>${esc(r)}</option>`).join("")}</select><button class="ghost" id="hlAdd">なぞったところに線を引く</button></div>
-</div>` : ""}
-        ${it.hl.length ? `<div class="hls">${it.hl.map((h, i) => `<div class="hli"><span class="chip" style="--c:var(--l-kata)">${esc(h.r)}</span>${h.box ? `<button class="mkref" data-lbopen="${h.p ? "pdf" : "img"}">${h.p ? `PDF ${h.p} ページの印` : "画像の印"}</button>` : `<q>${esc(h.t)}</q>`}<button data-hlrm="${i}" aria-label="線を消す">${IC.x}</button></div>`).join("")}</div>` : ""}
-        ${!it.body ? `<div><div class="dt-h">本文<span>「元の情報を直す」から入れられる</span></div><div class="dt-v">${it.excerpt ? esc(it.excerpt) : '<span class="num">本文はまだありません</span>'}</div></div>` : ""}
+        ${yid ? `<div class="ytv"><div class="ytslot" id="ytslot" data-v="${esc(yid)}"></div></div>` : it.shot ? shotView(it) : ""}${isPdf(it) ? `<div class="pdfv"><iframe src="${esc(it.file.url)}#view=FitH" title="PDF" loading="lazy"></iframe><button class="ghost" data-lbopen="pdf">大きく開く・印を付ける</button></div>` : ""}${it.file ? `<a class="filelink" href="${esc(it.file.url)}" target="_blank" rel="noopener">${IC.file}${esc(it.file.name || "ファイルを開く")}${it.file.pages ? `（${esc(it.file.pages)} ページ）` : ""}</a>` : ""}
+        ${tr ? `<div><div class="dt-h">文字起こし<span>時刻を押すとそこから再生・なぞって線を引ける</span></div><div class="tr" id="bodyText">${tr.map(l => `<div class="ln" data-s="${l.s}"><button class="ts" data-seek="${l.s}" aria-label="${l.t} から再生">${l.t}</button><span class="lx">${markText(l.x)}</span></div>`).join("")}</div>${hlBar}</div>`
+          : it.body ? `<div><div class="dt-h">本文<span>なぞって線を引ける</span></div><div class="dt-v" id="bodyText" style="white-space:pre-wrap">${hlBody(it)}</div>${hlBar}</div>` : ""}
+        ${it.hl.length ? `<div class="hls">${it.hl.map((h, i) => `<div class="hli"><span class="chip" style="--c:var(--l-kata)">${esc(h.r)}</span>${h.box ? `<button class="mkref" data-lbopen="${h.p ? "pdf" : "img"}">${h.p ? `PDF ${h.p} ページの印` : "画像の印"}</button>` : `${hlTime(h)}<q>${esc(h.t)}</q>`}<button data-hlrm="${i}" aria-label="線を消す">${IC.x}</button></div>`).join("")}</div>` : ""}
+        ${!it.body ? `<div><div class="dt-h">${yid ? "文字起こし" : "本文"}<span>${yid ? "パネルで保存すると入る・「元の情報を直す」から貼れる" : "「元の情報を直す」から入れられる"}</span></div><div class="dt-v">${it.excerpt ? esc(it.excerpt) : '<span class="num">本文はまだありません</span>'}</div></div>` : ""}
       </section>
       <section class="dt-an">
         <div><div class="dt-h">分析<span>${n} / 3・${STAGES[n]}</span></div><div class="steps">
@@ -499,7 +540,7 @@ export function startApp(root) {
   }
 
   /* ── 足す窓 ─────────────────────────────────────────── */
-  // 足す窓の置き場は「自動」が既定。自動は X→今月の表、note→記事、PDF→教材PDF、ほかは開いている表（無ければ未整理）
+  // 足す窓の置き場は「自動」が既定。自動は X・YouTube→今月の表、note→記事、PDF→教材PDF、ほかは開いている表（無ければ未整理）
   const browsingTable = () => (S.loc.startsWith("f:") && tableOf(S.table) ? S.table : "");
   // 同じリンクがもう保存されていたら知らせる（保存は止めない）
   function dupHTML(url) {
@@ -508,7 +549,7 @@ export function startApp(root) {
   }
   function addHTML() {
     const A = S.add;
-    const opts = `<option value="" ${A.table === "" ? "selected" : ""}>自動（X は今月の表・note は記事・PDF は教材PDF・ほかは開いている表）</option>${CFG.tables.map(t => `<option value="${t.id}" ${t.id === A.table ? "selected" : ""}>${esc(pathOf(t.id).join(" / "))}</option>`).join("")}`;
+    const opts = `<option value="" ${A.table === "" ? "selected" : ""}>自動（X と YouTube は今月の表・note は記事・PDF は教材PDF・ほかは開いている表）</option>${CFG.tables.map(t => `<option value="${t.id}" ${t.id === A.table ? "selected" : ""}>${esc(pathOf(t.id).join(" / "))}</option>`).join("")}`;
     return `<div class="mscrim" id="mScrim"></div><div class="modal addm" role="dialog" aria-label="スワイプを足す">
       <div class="m-top"><b style="font-size:15px">スワイプを足す</b><button class="icon" id="mClose" aria-label="閉じる">${IC.x}</button></div>
       <div class="addf">
@@ -536,6 +577,7 @@ export function startApp(root) {
     const addBtn = $("#addBtn"); if (addBtn) addBtn.hidden = S.scr !== "app";
     if (S.scr !== "app") {
       const keepC = ["#main", ".tw", ".dt-body", ".m-list"].map(sel => { const el = screen.querySelector(sel); return el ? [sel, el.scrollTop] : null; }).filter(Boolean);
+      screen.querySelector("#ytf")?.remove(); ytHold.replaceChildren();
       screen.innerHTML = coll.mainHTML(S.scr);
       keepC.forEach(([sel, t]) => { const el = screen.querySelector(sel); if (el) el.scrollTop = t; });
       remember(); return;
@@ -547,8 +589,10 @@ export function startApp(root) {
     if (S.loc.startsWith("f:") && !CFG.tables.some(t => t.folder === S.loc.slice(2))) body = subfoldersHTML(S.loc.slice(2));
     else body = listHTML();
     // 描き直しても、見ていた位置（縦・表の横）と、くわしくの窓の位置を保つ
-    const keep = ["#main", ".tw", ".dt-body", ".lb-body", ".lb-side"].map(sel => { const el = screen.querySelector(sel); return el ? [sel, el.scrollTop, el.scrollLeft] : null; }).filter(Boolean);
+    const keep = ["#main", ".tw", ".dt-body", ".lb-body", ".lb-side", "#bodyText.tr"].map(sel => { const el = screen.querySelector(sel); return el ? [sel, el.scrollTop, el.scrollLeft] : null; }).filter(Boolean);
+    const yf = screen.querySelector("#ytf"); if (yf) mv(ytHold, yf);
     screen.innerHTML = navHTML() + `<main class="main" id="main">${body}</main>` + (S.open ? detailHTML() : "") + (S.modal === "add" ? addHTML() : "") + cellPopHTML() + lbHTML();
+    mountYt(yf); if (ytT >= 0) markNow(false);
     keep.forEach(([sel, t, l]) => { const el = screen.querySelector(sel); if (el) { el.scrollTop = t; el.scrollLeft = l; } });
     placeCellPop();
     remember();
@@ -609,6 +653,7 @@ export function startApp(root) {
       let table = A.table;
       if (!table) {
         if (src === "X") { table = D.monthTableId(); if (ensureMonth(table)) saveCfg(); }
+        else if (src === "YouTube") { table = D.monthTableId(undefined, "yt"); if (ensureMonth(table)) saveCfg(); }
         else if (src === "note" && tableOf("t-note")) table = "t-note";
         else if (file?.kind === "pdf" && tableOf("t-lp-pdf")) table = "t-lp-pdf";
         else table = browsingTable();
@@ -630,6 +675,7 @@ export function startApp(root) {
     if (b = q("[data-scr]")) { if (S.scr !== b.dataset.scr) { S.scr = b.dataset.scr; S.open = null; S.lb = null; S.cellPop = null; S.sel.clear(); render(); main0(); } return; }
     if (q("#toastUndo")) { undoRemove(); $("#toast").hidden = true; return; }
     if (!screen.contains(t)) return;
+    if (b = q("[data-seek]")) { const sec = +b.dataset.seek; ytCmd("seekTo", [sec, true]); ytCmd("playVideo"); ytT = sec; markNow(false); return; }
     if (S.scr !== "app") { if (q("#navBtn")) { S.navOn = !S.navOn; render(); return; } coll.onClick(S.scr, t); return; }
     let closed = false; if (!q(".colbtn") && S.colPop) { S.colPop = false; closed = true; }
     if (!q(".fwrap") && S.fPop) { S.fPop = false; closed = true; }
@@ -837,5 +883,5 @@ export function startApp(root) {
     S.loading = false; render();
   }
   boot();
-  return () => { document.removeEventListener("paste", onPaste); document.removeEventListener("keydown", onKey); };
+  return () => { document.removeEventListener("paste", onPaste); document.removeEventListener("keydown", onKey); removeEventListener("message", onYtMsg); ytHold.remove(); };
 }
