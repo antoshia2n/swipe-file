@@ -113,8 +113,9 @@ export function toItem(r) {
     author: r.author || "",
     handle: p.handle || hostOf(r.source_url),
     url: r.source_url || "",
-    shot: p.shot || r.screenshot_url || p.ogImage || "",
-    shotIsOg: !p.shot && !r.screenshot_url && !!p.ogImage,
+    // YouTube で画像が無い行（パネルの前に保存したもの）は、動画のサムネを出す
+    shot: p.shot || r.screenshot_url || p.ogImage || (ytId(r.source_url) ? ytThumb(ytId(r.source_url)) : ""),
+    shotIsOg: !p.shot && !r.screenshot_url && (!!p.ogImage || !!ytId(r.source_url)),
     file: r.file_url ? { url: r.file_url, name: p.file_name || fileNameOf(r.file_url), pages: p.pages || "" } : null,
     shu: r.shu || "",
     ref: r.refs || [],
