@@ -8,6 +8,8 @@
 import * as D from "./data.js";
 import { createColl, DEFAULT_COLL } from "./coll.js";
 import { loadPdf } from "./pdfpages.js";
+import { mountAppShell } from "shia2n-core";
+import { makeTours } from "./tours.js";
 
 /* ── 決まった値 ───────────────────────────────────────── */
 const GRADE = { 5: "S", 4: "A", 3: "B", 2: "C", 1: "D" };
@@ -99,12 +101,62 @@ export function startApp(root) {
     <div class="top gut">
       <div class="brand">${BRAND_ICON}<span class="brand-t">スワイプくん<span>.</span></span></div>
       <nav class="hm" aria-label="機能"><button data-scr="app">スワイプ</button><button data-scr="pack">素材パック</button><button data-scr="share">共有ページ</button></nav>
-      <div class="top-r"><span class="lsub" id="saveState"></span><button class="ink" id="addBtn" aria-label="足す">＋<span class="add-t"> 足す</span></button></div>
+      <div class="top-r"><span class="lsub" id="saveState"></span><button class="ink" id="addBtn" aria-label="足す">＋<span class="add-t"> 足す</span></button><span class="shell-slot"></span></div>
     </div>
     <div class="screen" id="screen"></div>
   </div><div class="toast" id="toast" hidden></div>`;
   const $ = (s, el = root) => el.querySelector(s);
   const screen = $("#screen");
+
+  /* 共通の外枠（右上：使い方・アプリ一覧・アカウント。2026-10-27 作業 59）。上の帯は描き直さないので置くのは 1 回だけ */
+  try {
+    const shellGo = name => {
+      S.open = null; S.lb = null; S.cellPop = null; S.modal = null; S.add = null;
+      if (name === "todo") { S.scr = "app"; S.loc = "todo"; S.f = {}; }
+      else S.scr = name;
+      render();
+    };
+    const shell = mountAppShell({
+      appId: "swipe-file", appName: "スワイプくん",
+      manual: {
+        intro: "X のポスト・note・情報商材など、参考になる見本を保存して、なぜ良いかを言語化しておくアプリ。分析は 言語化 → 仮説 → 用途抽出 の 3 段で書きます。",
+        sections: [
+          { title: "足す", items: [
+            { t: "スワイプを足す", d: "右上の「＋ 足す」から。リンク・本文・画像か PDF のどれか 1 つがあれば保存できます。見出しは空ならリンク先の題名か本文の書き出しから付きます" },
+            { t: "画像や PDF を入れる", d: "足す窓に落とすか、貼り付けます（⌘／Ctrl＋V）", keys: ["⌘／Ctrl＋V"] },
+            { t: "置き場", d: "既定は自動です（X と YouTube は今月の表・note は記事・PDF は教材PDF・ほかは開いている表）。同じリンクがもう保存されていたら知らせます" },
+          ] },
+          { title: "探す・絞る", items: [
+            { t: "左のメニュー", d: "すべて・未分析・フォルダから選びます。フォルダは「＋」で足せます" },
+            { t: "探す", d: "上の欄で、本文・分析・投稿者の言葉で探します" },
+            { t: "絞り込み", d: "種類・参考ポイント・評価・ジャンル・分析で絞ります。「＋ ビュー」で、いまの絞り込みをビューとして残せます" },
+          ] },
+          { title: "見え方", items: [
+            { t: "ビューのタブ", d: "表・ギャラリー・分析の段・参考ポイントごと などを切り替えます" },
+          ] },
+          { title: "くわしくの窓", items: [
+            { t: "開く", d: "行やカードを押すと右に開きます。開いている間は j と k（↓ と ↑）で前後へ移れます", keys: ["j", "k"] },
+            { t: "画像・PDF を大きく見る", d: "画像や PDF を大きく開き、「囲んで印を付ける」を入れてなぞると、見てほしい所に印が付きます" },
+          ] },
+          { title: "分析", items: [
+            { t: "3 段で書く", d: "言語化（なぜ良いか）→ 仮説（ほかでも効きそうな型）→ 用途抽出（どこで・どう使うか）。書いた段の数で「分析」の印が進みます" },
+          ] },
+          { title: "素材パック", items: [
+            { t: "見本を集めて渡す", d: "上の帯の「素材パック」で、見本を集め、GPT や Claude に渡す文をコピーできます" },
+          ] },
+          { title: "共有ページ", items: [
+            { t: "見本を並べたページ", d: "上の帯の「共有ページ」で、選んだスワイプを並べたページを作ります。ログインなしで見られる形で公開されるのは、シアニンが作ったページだけです" },
+          ] },
+          { title: "保存", items: [
+            { t: "自動で保存", d: "書いて手を止めると保存されます。保存中は右上に「保存中…」と出ます" },
+          ] },
+        ],
+      },
+      keys: [["くわしくの窓", "j ／ k", "次へ／前へ"], ["窓", "Esc", "閉じる"], ["足す窓", "⌘／Ctrl＋V", "画像や PDF を貼り付ける"]],
+      tours: makeTours({ go: shellGo }),
+    });
+    shell.attach(root.querySelector(".shell-slot"));
+  } catch (_) { /* 外枠が出せなくてもアプリは動かす */ }
   /* ── YouTube の埋め込み（5便目） ─────────────────────────
      画面は描き直すたびに中身を作り直す。動画の枠まで作り直すと再生が止まるので、
      描き直しの間だけ外の置き場へ移して戻す（moveBefore なら再生したまま移せる） */
