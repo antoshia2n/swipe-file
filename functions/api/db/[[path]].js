@@ -8,8 +8,22 @@
  */
 
 import { createDbGateway } from "shia2n-core/server/db-gateway.js";
+import { canUseSwipe } from "../../_lib/swipe-access.js";
 
-export const onRequest = createDbGateway({
+// 使える人：SWIPE_ALLOW_UID（無ければ Naoki）に加えて、門番が swipe-file を開けると答えた人（2026-10-27 作業 58）
+const NAOKI_UID = "VrMwzeSceqWeXVQOrm8kpu4uVR33";
+let gw = null, gwKey = "";
+export const onRequest = async context => {
+  const allowUids = (context.env.SWIPE_ALLOW_UID ?? NAOKI_UID).split(",").map(s => s.trim()).filter(Boolean);
+  const access = await canUseSwipe({ request: context.request, env: context.env, allowUids });
+  if (access === "denied") return Response.json({ message: "この利用者にはスワイプくんを使う許可がありません。" }, { status: 403 });
+  const gatewayUids = access === "allowed" ? [] : allowUids;
+  const key = gatewayUids.join(",");
+  if (!gw || gwKey !== key) { gw = makeGateway(gatewayUids); gwKey = key; }
+  return gw(context);
+};
+const makeGateway = allowUids => createDbGateway({
+  allowUids,
   basePath: "/api/db",
   tables: {
     sw_swipes:   { owner: "user_id" },
