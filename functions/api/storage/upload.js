@@ -5,6 +5,7 @@
  * 見るときはこの口を通らない（入れ物は公開。名前はサーバーが決める推測できない名前）。
  */
 import { createStorageGateway } from "shia2n-core/server/storage-gateway.js";
+import { canUseSwipe } from "../../_lib/swipe-access.js";
 
 const NAOKI_UID = "VrMwzeSceqWeXVQOrm8kpu4uVR33";
 
@@ -18,8 +19,8 @@ const BUCKETS = {
 };
 
 export async function onRequest(context) {
-  const allowUids = (context.env.SWIPE_ALLOW_UID ?? NAOKI_UID)
-    .split(",").map(s => s.trim()).filter(Boolean);
-  const handler = createStorageGateway({ buckets: BUCKETS, allowUids });
-  return handler(context);
+  const allowUids = (context.env.SWIPE_ALLOW_UID ?? NAOKI_UID).split(",").map(s => s.trim()).filter(Boolean);
+  const access = await canUseSwipe({ request: context.request, env: context.env, allowUids });
+  if (access === "denied") return Response.json({ message: "この利用者にはスワイプくんを使う許可がありません。" }, { status: 403 });
+  return createStorageGateway({ buckets: BUCKETS, allowUids: access === "allowed" ? [] : allowUids })(context);
 }

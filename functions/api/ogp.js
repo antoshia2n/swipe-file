@@ -8,6 +8,9 @@
  * 要件どおり「OGP取得不能でも登録は通す」ため。
  */
 
+import { canUseSwipe } from "../_lib/swipe-access.js";
+
+const NAOKI_UID = "VrMwzeSceqWeXVQOrm8kpu4uVR33";
 const JSON_HEADERS = { "Content-Type": "application/json; charset=utf-8" };
 
 function pickMeta(html, key) {
@@ -35,7 +38,12 @@ function decodeEntities(s) {
 }
 
 export async function onRequestPost(context) {
-  const { request } = context;
+  const { request, env } = context;
+  // ログインして権利のある人だけ（2026-10-27 作業 58。前は誰でも好きな住所を取りに行かせられた）
+  const allowUids = (env.SWIPE_ALLOW_UID ?? NAOKI_UID).split(",").map(s => s.trim()).filter(Boolean);
+  const access = await canUseSwipe({ request, env, allowUids });
+  if (access === "no_token") return new Response(JSON.stringify({ error: "login required" }), { status: 401, headers: JSON_HEADERS });
+  if (access === "denied") return new Response(JSON.stringify({ error: "forbidden" }), { status: 403, headers: JSON_HEADERS });
 
   let url;
   try {

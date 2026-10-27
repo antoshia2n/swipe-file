@@ -6,6 +6,7 @@
  * まだどれかのスワイプが使っているファイル（同じ住所を画像やファイルに持つ行がある）は消さずに残す。
  */
 import { verifyIdToken } from "shia2n-core/server/db-gateway.js";
+import { canUseSwipe } from "../../_lib/swipe-access.js";
 
 const NAOKI_UID = "VrMwzeSceqWeXVQOrm8kpu4uVR33";
 const BUCKET = "swipe-files";
@@ -27,7 +28,7 @@ export async function onRequestPost({ request, env }) {
     uid = await verifyIdToken(token, projectId);
   } catch { return json(401, { ok: false, message: "ログインを確認できませんでした。" }); }
   const allow = (env.SWIPE_ALLOW_UID ?? NAOKI_UID).split(",").map(s => s.trim()).filter(Boolean);
-  if (!allow.includes(uid)) return json(403, { ok: false, message: "この利用者にはファイルを消す許可がありません。" });
+  if (!allow.includes(uid) && await canUseSwipe({ request, env, allowUids: allow }) !== "allowed") return json(403, { ok: false, message: "この利用者にはファイルを消す許可がありません。" });
 
   const body = await request.json().catch(() => ({}));
   const head = `${base}/storage/v1/object/public/${BUCKET}/`;

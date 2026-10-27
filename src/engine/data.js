@@ -217,7 +217,10 @@ export async function saveSettings(data) {
 
 export async function fetchOgp(url) {
   try {
-    const res = await fetch("/api/ogp", { method: "POST", headers: { "Content-Type": "application/json" }, body: JSON.stringify({ url }) });
+    const user = auth.currentUser;
+    if (!user) return null;
+    const token = await user.getIdToken();
+    const res = await fetch("/api/ogp", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ url }) });
     const j = await res.json();
     return j?.fetched ? j : null;
   } catch { return null; }

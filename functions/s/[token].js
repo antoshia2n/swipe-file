@@ -99,7 +99,9 @@ export async function onRequestGet(context) {
   if (!base(env) || !env.SUPABASE_SERVICE_ROLE_KEY) return message("いまページを開けません。少し時間をおいてもう一度開いてください。", 503, "env");
 
   let sh;
-  try { [sh] = await rest(env, `sw_shares?token=eq.${encodeURIComponent(token)}&select=*&limit=1`); }
+  // 出すのは Naoki が作った共有だけ（2026-10-27 作業 58。前は誰の共有でも「シアニンのスワイプ」として出た）
+  const owner = encodeURIComponent(env.SWIPE_SHARE_OWNER ?? "VrMwzeSceqWeXVQOrm8kpu4uVR33");
+  try { [sh] = await rest(env, `sw_shares?token=eq.${encodeURIComponent(token)}&user_id=eq.${owner}&select=*&limit=1`); }
   catch (e) { return message("いまページを開けません。少し時間をおいてもう一度開いてください。", 503, e.message); }
   if (!sh) return message(NOT_FOUND, 404);
   if (!sh.live) return message("このページは公開を止めています。", 410);
