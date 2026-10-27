@@ -19,23 +19,20 @@ const COLS = { shu: "種類", ref: "参考ポイント", grade: "評価", genre:
 const EXF = { "ポスト": ["投稿日", "いいね", "RT", "表示"], "記事": ["媒体", "価格", "スキ"], "教材": ["ページ数", "章の数", "価格"], "販売ページ": ["価格", "特典", "保証"] };
 const LABEL_KEYS = { shu: "種類", ref: "参考ポイント", genre: "ジャンル", tag: "ラベル" };
 
+/* 初期設定（新しく使い始める人だけに効く。保存済みの人は自分の設定のまま）。2026-10-27 に Naoki 専用の中身を外し、生徒向けにした（Naoki 21:05 OK） */
 export const DEFAULT_SETTINGS = () => ({
   v: 1,
   folders: [
     { id: "f-x", name: "Xポスト", parent: null },
     { id: "f-note", name: "note", parent: null },
-    { id: "f-lp", name: "情報商材", parent: null },
+    { id: "f-lp", name: "販売ページ・教材", parent: null },
     { id: "f-mine", name: "自分の資料", parent: null },
   ],
   tables: [
     { id: "t-note", name: "記事", folder: "f-note" },
     { id: "t-lp-page", name: "販売ページ", folder: "f-lp" },
     { id: "t-lp-pdf", name: "教材PDF", folder: "f-lp" },
-    { id: "t-mine-boshu", name: "募集告知", folder: "f-mine" },
-    { id: "t-mine-seminar", name: "セミナー資料", folder: "f-mine" },
-    { id: "t-mine-style", name: "文体基準", folder: "f-mine" },
-    { id: "t-mine-rule", name: "ルール", folder: "f-mine" },
-    { id: "t-mine-video", name: "動画", folder: "f-mine" },
+    { id: "t-mine-own", name: "自分の投稿", folder: "f-mine" }, // 伸びた自分の投稿や、型にしたい自分の文を置く
   ],
   views: [
     { id: "v1", name: "表", type: "table", f: {} },
@@ -50,7 +47,7 @@ export const DEFAULT_SETTINGS = () => ({
     shu: ["ポスト", "記事", "教材", "販売ページ"],
     ref: ["構文", "内容", "セールスの流れ", "実績の見せ方"],
     genre: ["自己啓発", "X集客", "ライティング", "言語化", "マーケ", "習慣", "思考"],
-    tag: ["募集告知", "セミナー資料", "文体基準", "有料教材", "販売ページ", "顧客の声", "自己開示", "スレッド", "図解"],
+    tag: ["書き出し", "締め", "図解", "スレッド", "自己開示", "顧客の声", "数字"],
   },
   coll: DEFAULT_COLL(),
 });
@@ -119,7 +116,7 @@ export function startApp(root) {
     const shell = mountAppShell({
       appId: "swipe-file", appName: "スワイプくん",
       manual: {
-        intro: "X のポスト・note・情報商材など、参考になる見本を保存して、なぜ良いかを言語化しておくアプリ。分析は 言語化 → 仮説 → 用途抽出 の 3 段で書きます。",
+        intro: "X のポスト・note・販売ページや教材など、参考になる見本を保存して、なぜ良いかを言語化しておくアプリ。分析は 言語化 → 仮説 → 用途抽出 の 3 段で書きます。",
         sections: [
           { title: "足す", items: [
             { t: "スワイプを足す", d: "右上の「＋ 足す」から。リンク・本文・画像か PDF のどれか 1 つがあれば保存できます。見出しは空ならリンク先の題名か本文の書き出しから付きます" },
