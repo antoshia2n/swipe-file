@@ -644,3 +644,23 @@ tr:hover .grade.g0,.grade.g0:focus{color:var(--faint);border-color:var(--line);b
 .yt-st.ok{color:var(--ok)}
 .yt-st.warn{color:var(--accent-ink)}
 .yt-st.wait{color:var(--faint)}
+
+/* スマホ対応（2026-10-29 先行の 3 人がスマホだけで迷わず使う・app-design-rules 5b・X攻略くんと同じ直し方）
+   読む：字は 12px 以上、書く欄は 16px（iPhone が勝手に拡大しない）／押す：44px 以上（帯とタブの中は縮めない）／
+   崩れない：素材パックと共有ページの表は 1 件 1 枚のカード（各欄の名前は coll.js が data-l で付ける） */
+@media (max-width:640px){
+  .auto span,.capb,.carry,.chip,.clicks,.cmt-l,.col-h .n,.colpop .cp-h,.cpop .cp-h,.demo,.dest span,.dt-nav .num,.exg label,.fold summary .n,.gchip,.live,.m-it .s,.mk em,.mrow-p,.nav-foot,.nh,.nv-n,.pdf-meta,.pg-n,.pl,.pn .xs-u,.pn-recent .s,.pop-h,.post.saved::after,.row-it .s,.rs .s,.sb-s,.sh-lab,.sh-no,.shot-tag,.shotv-cap,.sl span,.snip,.stage,.tc-ft,.tc-k,.tr .ts,.tsc,.ttab .n,.ur .d,.warnline,.xs-m,.xs-u,th{font-size:12px}
+  input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=hidden]),textarea,select{font-size:16px!important;min-height:44px!important}
+  button,select,[role="button"]{min-height:44px!important;min-width:44px}
+  input[type=checkbox],input[type=radio]{width:22px;height:22px}
+  #addBtn{min-width:44px}
+  .hm>*,.ttabs>*,.vtabs>*{flex:none}
+  .ctab{min-width:0!important;display:block}
+  .ctab thead{display:none}
+  .ctab tbody,.ctab tr,.ctab td{display:block;width:auto}
+  .ctab tr{padding:12px 14px;border-top:1px solid var(--line)}
+  .ctab tbody tr:first-child{border-top:0}
+  .ctab td{height:auto!important;padding:2px 0!important;border:0!important}
+  .ctab td[data-l]:not(:first-child)::before{content:attr(data-l);display:block;font-size:12px;color:var(--faint);font-weight:700}
+  .ctab td:empty{display:none}
+}

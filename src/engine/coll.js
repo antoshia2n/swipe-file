@@ -146,7 +146,7 @@ export function createColl(x) {
     const all = st.loc === "all";
     const warn = missing[k] ? `<div class="card empty">${LABEL[k]}の表がまだありません。作業 27（表を作る SQL）が終わると使えます。</div>` : "";
     const body = warn || (rows.length ? `<div class="card"><div class="tw"><table class="ctab"><thead><tr>${HEAD[k].map(h => `<th>${h}</th>`).join("")}${all ? "<th>場所</th>" : ""}</tr></thead><tbody>
-      ${rows.map(o => `<tr class="clickrow" data-copen="${o.id}">${ROW[k](o).map(v => `<td>${v}</td>`).join("")}${all ? `<td class="num">${esc(where(k, o.table))}</td>` : ""}</tr>`).join("")}</tbody></table></div></div>`
+      ${rows.map(o => `<tr class="clickrow" data-copen="${o.id}">${ROW[k](o).map((v, i) => `<td data-l="${esc(HEAD[k][i] || "")}">${v}</td>`).join("")}${all ? `<td class="num" data-l="場所">${esc(where(k, o.table))}</td>` : ""}</tr>`).join("")}</tbody></table></div></div>`
       : `<div class="card empty">${st.loc.startsWith("f:") && !st.table ? "このフォルダにはまだ表がありません。「＋ 表」から作ってください。" : `まだありません。「＋ 新しい${LABEL[k]}」か、スワイプの表で選んで「${LABEL[k]}に入れる」で作れます。`}</div>`);
     return `<div class="wrap gut">${x.headHTML([LABEL[k]], title, lead)}${tabs}
       <div class="vrow"><button class="ink" id="cNew" ${missing[k] ? "disabled" : ""}>＋ 新しい${LABEL[k]}</button><span class="lsub" style="margin-left:auto">${rows.length} 件</span></div>${body}</div>`;
