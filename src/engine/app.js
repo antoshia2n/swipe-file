@@ -569,6 +569,7 @@ export function startApp(root) {
        <div class="pg"><span class="pl">場所</span><select class="lsel mini" id="moveTo" aria-label="置き場">${tableOpts}</select></div>
      </div>
      ${meta ? `<div class="dt-meta">${meta}</div>` : ""}
+     ${yid && !tr ? `<div class="dt-meta">文字起こし待ち：<a href="${esc(it.url)}" target="_blank" rel="noopener">YouTube で開く ↗</a>　スワイプくんパネルの「文字起こしをこの保存に入れる」で入ります</div>` : ""}
      <div class="dt-body dt-cols">
       <section class="dt-src">
         ${yid ? `<div class="ytv"><div class="ytslot" id="ytslot" data-v="${esc(yid)}"></div></div>` : it.shot ? shotView(it) : ""}${isPdf(it) ? `<div class="pdfv"><iframe src="${esc(it.file.url)}#view=FitH" title="PDF" loading="lazy"></iframe><button class="ghost" data-lbopen="pdf">大きく開く・印を付ける</button></div>` : ""}${it.file ? `<a class="filelink" href="${esc(it.file.url)}" target="_blank" rel="noopener">${IC.file}${esc(it.file.name || "ファイルを開く")}${it.file.pages ? `（${esc(it.file.pages)} ページ）` : ""}</a>` : ""}
