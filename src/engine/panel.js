@@ -144,6 +144,12 @@ export function startPanel(root) {
     const dup = D.findSame(S.items, P.url);
     const dupLine = dup ? `<div class="dup">保存済み（${esc(dup.saved)}・${esc(tableName(dup.table))}）<a class="ghost" href="/?open=${encodeURIComponent(dup.id)}" target="_blank" rel="noopener">開く</a></div>` : "";
     const wait = Y.state === "wait";
+    // 保存済みなのに文字起こしが無い（画面に URL を貼って足した回）→ その保存に入れる（2026-10-30）
+    if (dup && D.needsTranscript(dup) && Y.state === "ok") {
+      return `<div class="box"><div class="box-h">この動画は保存済み<span>文字起こし待ち</span></div>${dupLine}
+      <div class="yt-st ok">${esc(st[1])}</div>
+      <button class="ink save" id="pnFill" ${S.busy ? "disabled" : ""}>${S.busy ? "入れています…" : "文字起こしをこの保存に入れる"}</button></div>`;
+    }
     return `<div class="box"><div class="box-h">この動画を保存<span>YouTube</span></div>${dupLine}
       <div class="yt-card"><img src="${esc(D.ytThumb(Y.id))}" alt="" referrerpolicy="no-referrer"><div><div class="xs-n" style="font-size:13.5px">${esc(title)}</div>${who ? `<div class="xs-u">${esc(who)}</div>` : ""}</div></div>
       <div class="yt-st ${st[0]}">${esc(st[1])}</div>
@@ -159,6 +165,19 @@ export function startPanel(root) {
     const ogp = { title: d.title || og.title || P.ogTitle || "", description: "", image: D.ytThumb(Y.id), author: d.channel || og.author || "" };
     const table = S.table || autoTable({ isX: false, url });
     return D.createItem({ url, body: D.transcriptBody(lines), ogp, props, why: S.memo, table, grade: S.grade, refs: [...S.refs] });
+  }
+  async function fillTranscript() {
+    const P = S.page, Y = S.yt, d = Y.data || {};
+    const it = D.findSame(S.items, P.url); if (!it || S.busy) return;
+    const lines = D.cleanTranscript(d.lines || []); if (!lines.length) return;
+    S.busy = true; render();
+    const before = { body: it.body, props: it.props };
+    try {
+      it.body = D.transcriptBody(lines);
+      it.props = { ...(it.props || {}), yt: { ...(it.props?.yt || {}), id: Y.id, len: d.len || it.props?.yt?.len || 0, cap: d.cap || "字幕" } };
+      await D.saveItem(it);
+      S.busy = false; render(); toast(`文字起こしを入れました（${lines.length} 行）`);
+    } catch (e) { Object.assign(it, before); S.busy = false; render(); toast(e.message); }
   }
   function dropBox() {
     const F = S.file;
@@ -235,6 +254,7 @@ export function startPanel(root) {
     if (b = q("[data-thr]")) { S.thread = b.dataset.thr === "1"; render(); return; }
     if (b = q("[data-ref]")) { const v = b.dataset.ref; S.refs.has(v) ? S.refs.delete(v) : S.refs.add(v); render(); return; }
     if (q("#pnSave")) { savePage(); return; }
+    if (q("#pnFill")) { fillTranscript(); return; }
     if (q("#pnFileSave")) { saveFile(); return; }
     if (q("#pnFileX")) { S.file = null; S.fileObj = null; render(); return; }
     if (q("#pnRetry")) { peek(); return; }

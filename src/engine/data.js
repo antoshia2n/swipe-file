@@ -68,6 +68,8 @@ export function cleanTranscript(lines) {
   return out;
 }
 /** 文字起こしは本文に「0:31 話したこと」の行で入れる。検索・線・素材パックがそのまま効く */
+// YouTube の保存で、本文に文字起こしが無いもの（画面に URL を貼って足した回など・2026-10-30）
+export const needsTranscript = it => !!ytId(it?.url) && !parseTranscript(it?.body);
 export const transcriptBody = lines => lines.map(([s, t]) => `${fmtTime(s)} ${t}`).join("\n");
 /** 本文が文字起こしの形なら [{ s:秒, t:時刻, x:文 }] を返す。違えば null */
 export function parseTranscript(body = "") {
