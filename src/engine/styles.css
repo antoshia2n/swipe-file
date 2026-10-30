@@ -688,3 +688,24 @@ tr:hover .grade.g0,.grade.g0:focus{color:var(--faint);border-color:var(--line);b
 .pk-new input{width:110px;border:1px dashed var(--line);border-radius:99px;padding:4px 10px;font:inherit;font-size:12px;background:var(--panel);color:var(--fg)}
 .pn-memo{min-height:110px;font-family:var(--f-body);line-height:1.6;tab-size:2}
 .pn-hint{font-size:11px;color:var(--faint);margin-top:4px;line-height:1.5}
+
+/* サイドパネルの大きさ（2026-10-30）
+   パネルは幅が 400px 前後なので、上の「スマホ対応」（書く欄 16px・押す所 44px）に入ってしまい、欄だけが大きく見えていた。
+   パネルはパソコンの Chrome の中でマウスで使うので、指で触る画面（pointer:coarse）でないときは元の大きさへ戻す。
+   読む字は 12px 以上・書く字は 13px・押す所は 28px 以上・欄の高さをそろえる。 */
+@media (pointer:fine){
+  .pn-app input:not([type=checkbox]):not([type=radio]):not([type=range]):not([type=hidden]),.pn-app textarea,.pn-app select{font-size:13px!important;min-height:0!important}
+  .pn-app button,.pn-app select,.pn-app [role="button"]{min-height:0!important;min-width:0}
+  .pn-app .dest select{height:30px;font-size:12.5px!important;max-width:230px}
+  .pn-app .grade{width:34px;height:28px;font-size:12.5px!important}
+  .pn-app .pk-new input{height:28px;width:120px;font-size:12.5px!important;padding:0 10px}
+  .pn-app .pn-memo{font-size:13px!important;line-height:1.7;padding:8px 10px;min-height:96px!important}
+}
+.pn-app .dest{font-size:12.5px;padding:6px 10px}
+.pn-app .grade.g0{color:var(--faint);border-color:var(--line);background:var(--panel)}
+.pn-app .pk{height:28px;font-size:12.5px}
+.pn-app .pk-new input{width:120px;padding:0 10px}
+.pn-app .pn-memo{line-height:1.7;padding:8px 10px}
+.pn-app .pk-new .pk{width:28px;padding:0;display:grid;place-items:center}
+.pn-app .pn-memo::placeholder{color:var(--faint)}
+.pn-app .pn-hint{font-size:12px}
