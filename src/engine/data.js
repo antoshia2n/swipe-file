@@ -20,6 +20,16 @@ async function run(q, fallback) {
   return data;
 }
 
+/* ── ラベルの重複よけ（2026-10-30） ──────────────────────
+ * 全角と半角・前後の空白・大文字と小文字の違いだけのラベルは同じものとして扱う（「ＣＴＡ」「cta 」→「CTA」）。
+ * 先に出てきた書き方を残す。 */
+export const labelKey = s => String(s ?? "").normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+export function uniqLabels(list) {
+  const seen = new Map();
+  for (const v of list) { const t = String(v ?? "").normalize("NFKC").replace(/\s+/g, " ").trim(); const k = t.toLowerCase(); if (t && !seen.has(k)) seen.set(k, t); }
+  return [...seen.values()];
+}
+
 /* ── 日付 ─────────────────────────────────────────────── */
 const JST = { timeZone: "Asia/Tokyo" };
 export function jstParts(iso) {
@@ -140,9 +150,10 @@ export function toItem(r) {
     shotIsOg: !p.shot && !r.screenshot_url && (!!p.ogImage || !!ytId(r.source_url)),
     file: r.file_url ? { url: r.file_url, name: p.file_name || fileNameOf(r.file_url), pages: p.pages || "" } : null,
     shu: r.shu || "",
-    ref: r.refs || [],
+    // 2026-10-30：参考ポイントはラベルに統一した（AI に指示するときの言葉をラベル 1 つにする）。前の参考ポイントはラベルとして読む
+    ref: [],
     genre: r.genres || [],
-    tags: r.labels || [],
+    tags: uniqLabels([...(r.labels || []), ...(r.refs || [])]),
     star: r.grade || 0,
     a: { why: r.reason || "", hypo: r.an_hypo || "", idea: r.an_idea || "" },
     ai: !!r.ai_ask,
@@ -172,7 +183,7 @@ export function toPatch(it) {
     table_id: it.table || null,
     file_url: it.file?.url || null,
     shu: it.shu || null,
-    refs: it.ref,
+    refs: [],
     grade: it.star || 0,
     genres: it.genre,
     labels: it.tags,
@@ -277,7 +288,8 @@ export async function createItem(f) {
     visibility: "private",
     table_id: f.table || null,
     shu: f.shu || shuFromSource(src) || null,
-    refs: f.refs || [],
+    refs: [],
+    labels: uniqLabels([...(f.labels || []), ...(f.refs || [])]),
     grade: f.grade || 0,
     file_url: isPdf ? f.file.url : null,
     props,

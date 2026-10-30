@@ -24,7 +24,7 @@ export function packText(pk, items, GRADE) {
   const its = pk.items.map(id => items.find(x => x.id === id)).filter(Boolean);
   const one = (it, i) => [
     `\n■ 見本 ${i + 1}：${it.title}`,
-    `種類：${it.shu || "なし"}／参考ポイント：${it.ref.join("・") || "なし"}／評価：${GRADE[it.star] || "なし"}／ジャンル：${it.genre.join("・") || "なし"}`,
+    `種類：${it.shu || "なし"}／ラベル：${it.tags.join("・") || "なし"}／評価：${GRADE[it.star] || "なし"}／ジャンル：${it.genre.join("・") || "なし"}`,
     it.url && `元のページ：${it.url}`,
     /^https?:/.test(it.shot || "") && `画像：${it.shot}`,
     it.file && `ファイル：${it.file.url}`,
@@ -35,7 +35,7 @@ export function packText(pk, items, GRADE) {
   ].filter(Boolean).join("\n");
   return [
     `【素材パック】${pk.name}`, `作るもの：${pk.make || "未設定"}`, `目的：${pk.goal || "未設定"}`, ``,
-    `以下の ${its.length} 件を見本にする。見本の文をそのまま写さず、参考ポイントに書いた部分だけを借りること。`,
+    `以下の ${its.length} 件を見本にする。見本の文をそのまま写さず、ラベルに書いた部分だけを借りること。`,
     ...its.map(one), ``,
     `Claude のチャットなら、swipe-mcp の swipe__get_pack でこの素材パック（${pk.name}）を名前で読める。`,
   ].join("\n");
@@ -155,7 +155,7 @@ export function createColl(x) {
   /* ── 編集の画面 ── */
   const backHTML = k => { const o = one(k); return `<button class="backlink" id="cBack">${IC.up.replace('m6 15 6-6 6 6', 'm15 6-6 6 6 6')}${esc(LABEL[k])} / ${esc(where(k, o.table))}</button>`; };
   function rowItHTML(it, k, extra = "") {
-    return `<div class="row-it">${x.gradeHTML(it, true) || '<span class="gchip">―</span>'}<div class="w"><button class="t namebtn" data-swopen="${it.id}" title="スワイプを開く">${esc(it.title)}</button><span class="s">${esc(it.shu || "種類なし")}${it.ref.length ? "・参考：" + esc(it.ref.join("・")) : ""}・${esc(x.pathOf(it.table).join(" / "))}</span>${extra}</div>
+    return `<div class="row-it">${x.gradeHTML(it, true) || '<span class="gchip">―</span>'}<div class="w"><button class="t namebtn" data-swopen="${it.id}" title="スワイプを開く">${esc(it.title)}</button><span class="s">${esc(it.shu || "種類なし")}${it.tags.length ? "・" + esc(it.tags.join("・")) : ""}・${esc(x.pathOf(it.table).join(" / "))}</span>${extra}</div>
       <span class="acts"><button data-cmv="${it.id}:-1" aria-label="上へ">${IC.up}</button><button data-cmv="${it.id}:1" aria-label="下へ">${IC.down}</button><button data-crm="${it.id}" aria-label="外す">${IC.x}</button></span></div>`;
   }
   const delBtn = k => `<button class="ghost ${U.delArm ? "danger" : ""}" id="cDel">${U.delArm ? "もう一度押すと消える" : `この${LABEL[k]}を消す`}</button>`;
