@@ -235,8 +235,53 @@ export function startApp(root) {
   }
   const labelList = key => {
     const fromItems = key === "shu" ? ITEMS.map(i => i.shu) : ITEMS.flatMap(i => key === "genre" ? i.genre : i.tags);
-    return key === "tag" ? D.uniqLabels([...(CFG.labels[key] || []), ...fromItems]) : uniq([...(CFG.labels[key] || []), ...fromItems]);
+    return key === "tag" ? tagGroups().flatMap(x => x[1]) : uniq([...(CFG.labels[key] || []), ...fromItems]);
   };
+  /* ── ラベルの分類（2026-10-30）：分類は 1 段だけ。CFG.lgroups＝分類の並び、CFG.lgOf＝ラベル→分類 ── */
+  const LG = () => (CFG.lgroups ||= []);
+  const lgOf = () => (CFG.lgOf ||= {});
+  const rawTags = () => D.uniqLabels([...(CFG.labels.tag || []), ...ITEMS.flatMap(i => i.tags)]);
+  function tagGroups() {
+    const all = rawTags(), m = lgOf(), ids = new Set(LG().map(g => g.id));
+    return [...LG().map(g => [g, all.filter(l => m[l] === g.id)]), [null, all.filter(l => !ids.has(m[l]))]];
+  }
+  const tagCount = l => ITEMS.filter(it => it.tags.includes(l)).length;
+  /* ラベルの名前を変える（同じ名前があればそちらへまとめる）・消す。使っている素材と線の名前も一緒に直す */
+  function renameTag(from, raw) {
+    const to = String(raw).normalize("NFKC").replace(/\s+/g, " ").trim(); if (!to || to === from) return;
+    const same = rawTags().find(x => x !== from && D.labelKey(x) === D.labelKey(to)); const name = same || to;
+    CFG.labels.tag = D.uniqLabels((CFG.labels.tag || []).map(x => x === from ? name : x).concat(name));
+    const m = lgOf(); if (!same && m[from]) m[name] = m[from]; delete m[from];
+    CFG.views.forEach(v => { if (v.f?.tag === from) v.f.tag = name; }); if (S.f.tag === from) S.f.tag = name;
+    ITEMS.forEach(it => { let hit = false;
+      if (it.tags.includes(from)) { it.tags = D.uniqLabels(it.tags.map(x => x === from ? name : x)); hit = true; }
+      it.hl.forEach(h => { if (h.r === from) { h.r = name; hit = true; } });
+      if (hit) changed(it, 0); });
+    saveCfg(); toast(same ? `「${same}」にまとめました` : `「${name}」に変えました`);
+  }
+  function deleteTag(l) {
+    CFG.labels.tag = (CFG.labels.tag || []).filter(x => x !== l); delete lgOf()[l];
+    CFG.views.forEach(v => { if (v.f?.tag === l) delete v.f.tag; }); if (S.f.tag === l) delete S.f.tag;
+    let n = 0;
+    ITEMS.forEach(it => { let hit = false;
+      if (it.tags.includes(l)) { it.tags = it.tags.filter(x => x !== l); hit = true; n++; }
+      it.hl.forEach(h => { if (h.r === l) { h.r = ""; hit = true; } });
+      if (hit) changed(it, 0); });
+    saveCfg(); toast(n ? `「${l}」を消し、${n} 件から外しました` : `「${l}」を消しました`);
+  }
+  function labelsHTML() {
+    const opts = sel => `<option value="">分類なし</option>${LG().map(g => `<option value="${g.id}" ${sel === g.id ? "selected" : ""}>${esc(g.name)}</option>`).join("")}`;
+    const row = l => { const n = tagCount(l), arm = S.lgArm === l;
+      return `<div class="lg-r"><input class="lg-l" data-lren="${esc(l)}" value="${esc(l)}" aria-label="ラベルの名前"><span class="lg-c">${n} 件</span>
+        <select class="lg-s" data-lmove="${esc(l)}" aria-label="分類">${opts(lgOf()[l])}</select>
+        <button class="ghost lg-x ${arm ? "danger" : ""}" data-ldel="${esc(l)}">${arm ? (n ? `${n} 件から外して消す` : "もう一度押すと消す") : "消す"}</button></div>`; };
+    const box = ([g, ls], i) => `<section class="lg"><div class="lg-h">${g
+      ? `<input class="lg-name" data-lgren="${g.id}" value="${esc(g.name)}" aria-label="分類の名前"><button class="ghost lg-mv" data-lgmv="${g.id}:-1" aria-label="前へ" ${i ? "" : "disabled"}>${IC.up}</button><button class="ghost lg-mv" data-lgmv="${g.id}:1" aria-label="後ろへ" ${i < LG().length - 1 ? "" : "disabled"}>${IC.down}</button><button class="ghost" data-lgdel="${g.id}" title="中のラベルは「分類なし」へ移る">分類をやめる</button>`
+      : `<span class="lg-name0">分類なし</span>`}<span class="nv-n">${ls.length}</span></div>${ls.map(row).join("") || '<div class="lg-empty">ここにはまだ無い。各ラベルの右の欄で分類を選ぶと移る</div>'}</section>`;
+    return `<div class="wrap gut">` + headHTML(["スワイプくん"], "ラベルを整える", "AI に指示するときの言葉。分類ごとに並べ、要らないものは消す。分類は、素材を開いたときの選び方・「ラベルごと」の並び・絞り込みにそのまま効く。名前は欄を直して Enter で変わる（同じ名前があればそちらへまとまる）。")
+      + `<div class="lgbar"><input id="lgNewLabel" placeholder="新しいラベル"><button class="ghost" id="lgAddLabel">＋ ラベル</button><span class="lg-sp"></span><input id="lgNewGroup" placeholder="新しい分類（例：型・素材・中身）"><button class="ghost" id="lgAddGroup">＋ 分類</button></div>
+      <div class="lgs">${tagGroups().map(box).join("")}</div></div>`;
+  }
   /* ラベルを足すときの重複よけ（2026-10-30）：同じものは今あるほうを使う。似た名前は足す前に確かめる */
   function pickLabel(key, raw) {
     const v = String(raw).normalize("NFKC").replace(/\s+/g, " ").trim(); if (!v) return null;
@@ -318,6 +363,7 @@ export function startApp(root) {
       ${nv("todo", "未分析", cnt(it => stageOf(it) === 0), { c: "var(--accent)", cls: "warn" })}
       ${nv("ai", "Claude に頼んだ分析", cnt(it => it.ai), { c: "var(--k-doc)" })}
       ${un ? nv("unsorted", "未整理（置き場なし）", un, { c: "var(--k-lp)" }) : ""}
+      ${nv("labels", "ラベルを整える", rawTags().length, { c: "var(--l-kata)" })}
       <div class="nh"><span>フォルダ</span><button id="addFolder" aria-label="フォルダを足す" title="フォルダを足す">＋</button></div>
       ${tree(null, 0)}
     </div></nav>`;
@@ -339,7 +385,9 @@ export function startApp(root) {
   function labelSels(F, attr) {
     const sel = (key, label, opts) => `<select class="fsel ${F[key] !== undefined && F[key] !== "" && F[key] !== 0 ? "on" : ""}" data-${attr}="${key}" aria-label="${label}"><option value="">${label}</option>${opts.map(o => `<option value="${esc(o[0])}" ${String(F[key] ?? "") === String(o[0]) ? "selected" : ""}>${esc(o[1])}</option>`).join("")}</select>`;
     return sel("shu", "種類", labelList("shu").map(x => [x, x])) + sel("star", "評価", [[5, "S"], [4, "A 以上"], [3, "B 以上"]])
-      + sel("genre", "ジャンル", labelList("genre").map(x => [x, x])) + sel("stagex", "分析", STAGES.map((x, i) => [i, x])) + sel("tag", "ラベル", labelList("tag").map(x => [x, x]));
+      + sel("genre", "ジャンル", labelList("genre").map(x => [x, x])) + sel("stagex", "分析", STAGES.map((x, i) => [i, x])) + (LG().length
+        ? `<select class="fsel ${F.tag ? "on" : ""}" data-${attr}="tag" aria-label="ラベル"><option value="">ラベル</option>${tagGroups().filter(x => x[1].length).map(([g, ls]) => `<optgroup label="${esc(g ? g.name : "分類なし")}">${ls.map(x => `<option value="${esc(x)}" ${F.tag === x ? "selected" : ""}>${esc(x)}</option>`).join("")}</optgroup>`).join("")}</select>`
+        : sel("tag", "ラベル", labelList("tag").map(x => [x, x])));
   }
   function colPopHTML() {
     const all = [...CFG.cols, ...Object.keys(COLS).filter(k => !CFG.cols.includes(k))];
@@ -356,7 +404,9 @@ export function startApp(root) {
     const field = FIELD_OF[P.key];
     const has = v => P.key === "shu" ? it.shu === v : it[field].includes(v);
     return `<div class="cpop" id="cpop" role="dialog" aria-label="${LABEL_KEYS[P.key]}"><div class="cp-h">${LABEL_KEYS[P.key]}${P.key === "shu" ? "（1 つ選ぶ）" : "（いくつでも）"}</div>
-      <div class="pick">${labelList(P.key).map(v => `<button class="pk ${has(v) ? "on" : ""}" data-cpv="${esc(v)}">${esc(v)}</button>`).join("")}<button class="pk" data-newlabel="${P.key}" data-for="${it.id}" title="選べる値を足す">＋</button></div></div>`;
+      ${P.key === "tag" && LG().length
+        ? tagGroups().filter(x => x[1].length).map(([g, ls]) => `<div class="cp-g">${esc(g ? g.name : "分類なし")}</div><div class="pick">${ls.map(v => `<button class="pk ${has(v) ? "on" : ""}" data-cpv="${esc(v)}">${esc(v)}</button>`).join("")}</div>`).join("") + `<div class="pick"><button class="pk" data-newlabel="tag" data-for="${it.id}" title="選べる値を足す">＋</button></div>`
+        : `<div class="pick">${labelList(P.key).map(v => `<button class="pk ${has(v) ? "on" : ""}" data-cpv="${esc(v)}">${esc(v)}</button>`).join("")}<button class="pk" data-newlabel="${P.key}" data-for="${it.id}" title="選べる値を足す">＋</button></div>`}</div>`;
   }
   function placeCellPop() {
     const pop = document.getElementById("cpop"); if (!pop || !S.cellPop) return;
@@ -643,7 +693,8 @@ export function startApp(root) {
     if (S.loc.startsWith("f:") && !folderOf(S.loc.slice(2))) S.loc = "all";
     if (S.loc === "unsorted" && !unsorted().length) S.loc = "all";
     let body;
-    if (S.loc.startsWith("f:") && !CFG.tables.some(t => t.folder === S.loc.slice(2))) body = subfoldersHTML(S.loc.slice(2));
+    if (S.loc === "labels") body = labelsHTML();
+    else if (S.loc.startsWith("f:") && !CFG.tables.some(t => t.folder === S.loc.slice(2))) body = subfoldersHTML(S.loc.slice(2));
     else body = listHTML();
     // 描き直しても、見ていた位置（縦・表の横）と、くわしくの窓の位置を保つ
     const keep = ["#main", ".tw", ".dt-body", ".lb-body", ".lb-side", "#bodyText.tr"].map(sel => { const el = screen.querySelector(sel); return el ? [sel, el.scrollTop, el.scrollLeft] : null; }).filter(Boolean);
@@ -782,6 +833,12 @@ export function startApp(root) {
     if (b = q("[data-open]")) { S.open = b.dataset.open; S.delArm = false; S.bodyEdit = false; render(); return; }
     if (q("#navBtn")) { S.navOn = !S.navOn; render(); return; }
     if (t.id === "scrim" || q("#dtClose")) { S.open = null; S.lb = null; render(); return; }
+    if (q("#lgAddLabel")) { const n = $("#lgNewLabel"); const v = n && n.value.trim() ? pickLabel("tag", n.value) : null; if (!v) return; CFG.labels.tag = D.uniqLabels([...(CFG.labels.tag || []), v]); saveCfg(); render(); return; }
+    if (q("#lgAddGroup")) { const n = $("#lgNewGroup"); const v = (n?.value || "").trim(); if (!v) return; if (LG().some(g => g.name === v)) { toast(`分類「${v}」はもうあります`); return; } LG().push({ id: "g" + Date.now().toString(36), name: v }); saveCfg(); render(); return; }
+    if (b = q("[data-lgmv]")) { const [id, d] = b.dataset.lgmv.split(":"); const a = LG(), i = a.findIndex(g => g.id === id), j = i + +d; if (i < 0 || j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; saveCfg(); render(); return; }
+    if (b = q("[data-lgdel]")) { const id = b.dataset.lgdel; CFG.lgroups = LG().filter(g => g.id !== id); const m = lgOf(); Object.keys(m).forEach(k => { if (m[k] === id) delete m[k]; }); saveCfg(); render(); return; }
+    if (b = q("[data-ldel]")) { const l = b.dataset.ldel; if (S.lgArm !== l) { S.lgArm = l; render(); return; } S.lgArm = null; deleteTag(l); render(); return; }
+    if (S.lgArm && !q("[data-ldel]")) S.lgArm = null;
     if (b = q("[data-newlabel]")) {
       const key = b.dataset.newlabel; const raw = prompt(`${LABEL_KEYS[key]}に足す値`); if (!raw || !raw.trim()) return;
       const v = pickLabel(key, raw); if (!v) return;
@@ -823,6 +880,9 @@ export function startApp(root) {
   screen.addEventListener("change", async e => {
     const t = e.target;
     if (S.scr !== "app") { coll.onChange(S.scr, t); return; }
+    if (t.dataset.lren !== undefined) { renameTag(t.dataset.lren, t.value); render(); return; }
+    if (t.dataset.lgren) { const g = LG().find(x => x.id === t.dataset.lgren); const v = t.value.trim(); if (g && v) { g.name = v; saveCfg(); } render(); return; }
+    if (t.dataset.lmove !== undefined) { const m = lgOf(); if (t.value) m[t.dataset.lmove] = t.value; else delete m[t.dataset.lmove]; saveCfg(); render(); return; }
     if (t.id === "bulkSet" && t.value) {
       const i = t.value.indexOf(":"), k = t.value.slice(0, i), v = t.value.slice(i + 1);
       const sel = ITEMS.filter(it => S.sel.has(it.id));

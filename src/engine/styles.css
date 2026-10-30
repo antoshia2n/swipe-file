@@ -664,3 +664,22 @@ tr:hover .grade.g0,.grade.g0:focus{color:var(--faint);border-color:var(--line);b
   .ctab td[data-l]:not(:first-child)::before{content:attr(data-l);display:block;font-size:12px;color:var(--faint);font-weight:700}
   .ctab td:empty{display:none}
 }
+
+/* ラベルを整える（2026-10-30） */
+.lgbar{display:flex;gap:8px;flex-wrap:wrap;align-items:center;margin:16px 0 14px}
+.lgbar input,.lg-name,.lg-l{border:1px solid var(--line);border-radius:8px;padding:6px 10px;font:inherit;font-size:13px;background:var(--panel);color:var(--fg);min-width:0}
+.lgbar input{width:220px}
+.lg-sp{flex:0 0 12px}
+.lgs{display:grid;grid-template-columns:repeat(auto-fill,minmax(340px,1fr));gap:12px;align-items:start}
+.lg{border:1px solid var(--line);border-radius:12px;padding:10px 12px;background:var(--panel)}
+.lg-h{display:flex;align-items:center;gap:6px;margin-bottom:6px}
+.lg-name{flex:1;font-weight:700}
+.lg-name0{flex:1;font-weight:700;color:var(--muted);padding:6px 0;font-size:13px}
+.lg-mv{padding:5px 6px}.lg-mv:disabled{opacity:.35}
+.lg-r{display:flex;align-items:center;gap:6px;padding:5px 0;border-top:1px solid var(--hair)}
+.lg-l{flex:1;border-color:transparent;background:transparent}.lg-l:hover,.lg-l:focus{border-color:var(--line);background:var(--bg)}
+.lg-c{font-size:11px;color:var(--faint);width:40px;text-align:right;font-variant-numeric:tabular-nums}
+.lg-s{font-size:12px;max-width:110px;border:1px solid var(--line);border-radius:7px;padding:4px;background:var(--panel);color:var(--muted)}
+.lg-x{padding:4px 9px}
+.lg-empty{font-size:12px;color:var(--faint);padding:6px 0}
+.cp-g{font-size:11px;font-weight:700;color:var(--faint);margin:8px 0 4px}
