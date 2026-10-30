@@ -1,7 +1,7 @@
 /**
  * スワイプくんの細い画面（/panel）。拡張機能「スワイプくんパネル」のサイドパネルの中で開く。
  * 見ているページを読む・撮るのは拡張機能（swipe-kun-panel/panel.js）。ここは頼んで、受け取って、保存する。
- * 形はデモ 8 のサイドパネルそのまま。保存までの操作は「保存する」1 回（撮り方・参考ポイントは前回のまま）。
+ * 形はデモ 8 のサイドパネルそのまま。保存までの操作は「保存する」1 回（撮り方・ラベルは前回のまま）。
  */
 import * as D from "./data.js";
 
@@ -80,7 +80,8 @@ export function startPanel(root) {
   /* ── 置き場とラベル ───────────────────────────────── */
   const tables = () => (S.cfg?.tables || []);
   const tableName = id => { const t = tables().find(x => x.id === id); if (!t) { const m = /^(x|yt)-(\d{4})-(\d{2})$/.exec(id || ""); return m ? `${m[1] === "x" ? "Xポスト" : "YouTube"} / ${m[2]}年 / ${+m[3]}月` : "未整理"; } const fs = S.cfg.folders || []; const p = []; let f = fs.find(x => x.id === t.folder); while (f) { p.unshift(f.name); f = fs.find(x => x.id === f.parent); } return [...p, t.name].join(" / "); };
-  const refList = () => [...new Set([...(S.cfg?.labels?.ref || REF_DEFAULT), ...S.items.flatMap(i => i.ref)])];
+  // 2026-10-30：参考ポイントはラベルに統一。前の参考ポイントの値もラベルの候補に入れる
+  const refList = () => D.uniqLabels([...(S.cfg?.labels?.ref || []), ...(S.cfg?.labels?.tag || REF_DEFAULT), ...S.items.flatMap(i => i.tags)]);
   function autoTable({ isX, url, isPdf }) {
     if (isX) return D.monthTableId();
     if (D.ytId(url)) return D.monthTableId(undefined, "yt");
@@ -97,7 +98,7 @@ export function startPanel(root) {
     const opts = `<option value="">自動：${esc(tableName(auto))}</option>${tables().map(t => `<option value="${t.id}" ${S.table === t.id ? "selected" : ""}>${esc(tableName(t.id))}</option>`).join("")}`;
     return `<div class="dest"><div>保存先</div><select class="lsel mini" id="pnTable" aria-label="保存先">${opts}</select></div>
       <div class="frow"><span class="dt-h" style="margin:0">評価</span><select class="grade g${S.grade}" id="pnGrade" aria-label="評価">${["", 5, 4, 3, 2, 1].map(v => `<option value="${v}" ${String(v) === String(S.grade || "") ? "selected" : ""}>${v ? GRADE[v] : "―"}</option>`).join("")}</select><span class="lsub">空でもよい</span></div>
-      <div><div class="dt-h">参考ポイント<span>前回の選び方を覚えておく</span></div><div class="pick">${refList().map(x => `<button class="pk ${S.refs.has(x) ? "on" : ""}" style="--c:var(--l-kata)" data-ref="${esc(x)}">${esc(x)}</button>`).join("")}</div></div>
+      <div><div class="dt-h">ラベル<span>AI に借りてほしいところ。前回の選び方を覚えておく</span></div><div class="pick">${refList().map(x => `<button class="pk ${S.refs.has(x) ? "on" : ""}" style="--c:var(--l-kata)" data-ref="${esc(x)}">${esc(x)}</button>`).join("")}</div></div>
       <div><div class="dt-h">ひとこと<span>空でもよい・分析の「言語化」に入る</span></div><textarea class="pn-in" id="pnMemo" placeholder="なぜ目に止まったか（あとで書いてもよい）">${esc(S.memo)}</textarea></div>`;
   }
   function pageBox() {

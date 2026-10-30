@@ -15,9 +15,9 @@ import { makeTours } from "./tours.js";
 const GRADE = { 5: "S", 4: "A", 3: "B", 2: "C", 1: "D" };
 const STAGES = ["未分析", "言語化", "仮説", "用途抽出"];
 const KINDC = { x: "var(--k-x)", note: "var(--k-note)", lp: "var(--k-lp)", doc: "var(--k-doc)" };
-const COLS = { shu: "種類", ref: "参考ポイント", grade: "評価", genre: "ジャンル", stage: "分析", tags: "ラベル", place: "場所", metric: "数字（保存時）", shares: "共有ページ", used: "使った", saved: "保存" };
+const COLS = { shu: "種類", grade: "評価", genre: "ジャンル", stage: "分析", tags: "ラベル", place: "場所", metric: "数字（保存時）", shares: "共有ページ", used: "使った", saved: "保存" };
 const EXF = { "ポスト": ["投稿日", "いいね", "RT", "表示"], "記事": ["媒体", "価格", "スキ"], "教材": ["ページ数", "章の数", "価格"], "販売ページ": ["価格", "特典", "保証"] };
-const LABEL_KEYS = { shu: "種類", ref: "参考ポイント", genre: "ジャンル", tag: "ラベル" };
+const LABEL_KEYS = { shu: "種類", genre: "ジャンル", tag: "ラベル" };
 
 /* 初期設定（新しく使い始める人だけに効く。保存済みの人は自分の設定のまま）。2026-10-27 に Naoki 専用の中身を外し、生徒向けにした（Naoki 21:05 OK） */
 export const DEFAULT_SETTINGS = () => ({
@@ -38,23 +38,23 @@ export const DEFAULT_SETTINGS = () => ({
     { id: "v1", name: "表", type: "table", f: {} },
     { id: "v2", name: "ギャラリー", type: "gal", f: {} },
     { id: "v3", name: "分析の段", type: "board", group: "stage", f: {} },
-    { id: "v4", name: "参考ポイントごと", type: "board", group: "ref", f: {} },
+    { id: "v4", name: "ラベルごと", type: "board", group: "tag", f: {} },
     { id: "v5", name: "A 以上", type: "table", f: { star: 4 } },
     { id: "v6", name: "未分析", type: "table", f: { todo: true } },
   ],
-  cols: ["shu", "ref", "grade", "genre", "stage", "tags", "used", "metric", "saved"],
+  cols: ["shu", "grade", "genre", "stage", "tags", "used", "metric", "saved"],
   labels: {
     shu: ["ポスト", "記事", "教材", "販売ページ"],
-    ref: ["構文", "内容", "セールスの流れ", "実績の見せ方"],
     genre: ["自己啓発", "X集客", "ライティング", "言語化", "マーケ", "習慣", "思考"],
-    tag: ["書き出し", "締め", "図解", "スレッド", "自己開示", "顧客の声", "数字"],
+    // 2026-10-30：参考ポイント（構文・内容・セールスの流れ・実績の見せ方）をラベルに統一した
+    tag: ["構文", "内容", "セールスの流れ", "実績の見せ方", "書き出し", "締め", "図解", "スレッド", "自己開示", "顧客の声", "数字"],
   },
   coll: DEFAULT_COLL(),
 });
 
 // シアニン共通のアイコン（プロジェクト資料 claude/icon-rules.md の形・スワイプくんの色と絵）
 const BRAND_ICON = '<svg class="brand-i" width="22" height="22" viewBox="0 0 128 128" aria-hidden="true"><defs><clipPath id="bic"><path d="M44 0H114A14 14 0 0 1 128 14V84A44 44 0 0 1 84 128H14A14 14 0 0 1 0 114V44A44 44 0 0 1 44 0Z"/></clipPath><mask id="bim"><rect width="128" height="128" fill="#fff"/><g fill="#000"><circle cx="132" cy="40" r="19"/><circle cx="-4" cy="90" r="19"/></g></mask></defs><g mask="url(#bim)"><g clip-path="url(#bic)"><rect width="128" height="128" fill="#2563eb"/><path d="M0 128V58C34 58 40 82 64 82S94 104 128 104V128Z" fill="#000" fill-opacity=".22"/></g><g transform="translate(14 14) scale(4.17)" fill="none" stroke="#fff" stroke-width="2.9" stroke-linecap="round" stroke-linejoin="round"><path d="M6 3.5h12v17l-6-4.2-6 4.2z"/><path d="M9.5 8.5h5M9.5 12h5"/></g></g></svg>';
-const F_NAME = { shu: "種類", ref: "参考ポイント", star: "評価", genre: "ジャンル", stagex: "分析", tag: "ラベル" };
+const F_NAME = { shu: "種類", star: "評価", genre: "ジャンル", stagex: "分析", tag: "ラベル" };
 const isPhone = () => matchMedia("(max-width: 640px)").matches;
 
 /* ── 小さな道具 ───────────────────────────────────────── */
@@ -126,10 +126,10 @@ export function startApp(root) {
           { title: "探す・絞る", items: [
             { t: "左のメニュー", d: "すべて・未分析・フォルダから選びます。フォルダは「＋」で足せます" },
             { t: "探す", d: "上の欄で、本文・分析・投稿者の言葉で探します" },
-            { t: "絞り込み", d: "種類・参考ポイント・評価・ジャンル・分析で絞ります。「＋ ビュー」で、いまの絞り込みをビューとして残せます" },
+            { t: "絞り込み", d: "種類・ラベル・評価・ジャンル・分析で絞ります。「＋ ビュー」で、いまの絞り込みをビューとして残せます" },
           ] },
           { title: "見え方", items: [
-            { t: "ビューのタブ", d: "表・ギャラリー・分析の段・参考ポイントごと などを切り替えます" },
+            { t: "ビューのタブ", d: "表・ギャラリー・分析の段・ラベルごと などを切り替えます" },
           ] },
           { title: "くわしくの窓", items: [
             { t: "開く", d: "行やカードを押すと右に開きます。開いている間は j と k（↓ と ↑）で前後へ移れます", keys: ["j", "k"] },
@@ -234,9 +234,19 @@ export function startApp(root) {
     return true;
   }
   const labelList = key => {
-    const fromItems = key === "shu" ? ITEMS.map(i => i.shu) : ITEMS.flatMap(i => key === "ref" ? i.ref : key === "genre" ? i.genre : i.tags);
-    return uniq([...(CFG.labels[key] || []), ...fromItems]);
+    const fromItems = key === "shu" ? ITEMS.map(i => i.shu) : ITEMS.flatMap(i => key === "genre" ? i.genre : i.tags);
+    return key === "tag" ? D.uniqLabels([...(CFG.labels[key] || []), ...fromItems]) : uniq([...(CFG.labels[key] || []), ...fromItems]);
   };
+  /* ラベルを足すときの重複よけ（2026-10-30）：同じものは今あるほうを使う。似た名前は足す前に確かめる */
+  function pickLabel(key, raw) {
+    const v = String(raw).normalize("NFKC").replace(/\s+/g, " ").trim(); if (!v) return null;
+    const list = labelList(key); const k = D.labelKey(v);
+    const same = list.find(x => D.labelKey(x) === k);
+    if (same) { toast(`「${same}」がもうあるので、それを使いました`); return same; }
+    const near = list.filter(x => { const xk = D.labelKey(x); return Math.min(xk.length, k.length) >= 2 && (xk.includes(k) || k.includes(xk)); });
+    if (near.length && !confirm(`「${near.join("」「")}」と似ています。別のラベルとして「${v}」を足しますか？\n（キャンセルで足さない）`)) return null;
+    return v;
+  }
 
   /* ── 絞り込み ───────────────────────────────────────── */
   const stageOf = it => ["why", "hypo", "idea"].filter(k => (it.a[k] || "").trim()).length;
@@ -249,10 +259,10 @@ export function startApp(root) {
     return [];
   }
   const curView = () => CFG.views.find(v => v.id === S.view) || CFG.views[0];
-  const matchQ = (it, q) => [it.title, it.body, it.excerpt, it.author, it.handle, it.a.why, it.a.hypo, it.a.idea, it.tags.join(" "), it.ref.join(" "), it.genre.join(" "), it.shu, it.file?.name || "", it.url].join("\n").toLowerCase().includes(q);
+  const matchQ = (it, q) => [it.title, it.body, it.excerpt, it.author, it.handle, it.a.why, it.a.hypo, it.a.idea, it.tags.join(" "), it.genre.join(" "), it.shu, it.file?.name || "", it.url].join("\n").toLowerCase().includes(q);
   function labelFilter(a, f) {
     if (f.shu) a = a.filter(it => it.shu === f.shu);
-    if (f.ref) a = a.filter(it => it.ref.includes(f.ref));
+    if (f.ref) a = a.filter(it => it.tags.includes(f.ref));
     if (f.genre) a = a.filter(it => it.genre.includes(f.genre));
     if (f.stagex !== undefined && f.stagex !== "") a = a.filter(it => stageOf(it) === +f.stagex);
     if (f.tag) a = a.filter(it => it.tags.includes(f.tag));
@@ -328,7 +338,7 @@ export function startApp(root) {
   }
   function labelSels(F, attr) {
     const sel = (key, label, opts) => `<select class="fsel ${F[key] !== undefined && F[key] !== "" && F[key] !== 0 ? "on" : ""}" data-${attr}="${key}" aria-label="${label}"><option value="">${label}</option>${opts.map(o => `<option value="${esc(o[0])}" ${String(F[key] ?? "") === String(o[0]) ? "selected" : ""}>${esc(o[1])}</option>`).join("")}</select>`;
-    return sel("shu", "種類", labelList("shu").map(x => [x, x])) + sel("ref", "参考ポイント", labelList("ref").map(x => [x, x])) + sel("star", "評価", [[5, "S"], [4, "A 以上"], [3, "B 以上"]])
+    return sel("shu", "種類", labelList("shu").map(x => [x, x])) + sel("star", "評価", [[5, "S"], [4, "A 以上"], [3, "B 以上"]])
       + sel("genre", "ジャンル", labelList("genre").map(x => [x, x])) + sel("stagex", "分析", STAGES.map((x, i) => [i, x])) + sel("tag", "ラベル", labelList("tag").map(x => [x, x]));
   }
   function colPopHTML() {
@@ -338,7 +348,7 @@ export function startApp(root) {
         ${on ? `<button data-colmv="${k}:-1" aria-label="上へ">${IC.up}</button><button data-colmv="${k}:1" aria-label="下へ">${IC.down}</button>` : ""}</div>`; }).join("")}</div>`;
   }
   /* 表のセルをその場で直す（Notion のように押すと選べる窓が出る） */
-  const FIELD_OF = { shu: "shu", ref: "ref", genre: "genre", tag: "tags" };
+  const FIELD_OF = { shu: "shu", genre: "genre", tag: "tags" };
   const cellPick = (it, key, inner) => `<button class="cellpick ${S.cellPop && S.cellPop.id === it.id && S.cellPop.key === key ? "on" : ""}" data-cp="${key}" data-id="${it.id}" aria-label="${LABEL_KEYS[key]}を直す">${inner}</button>`;
   function cellPopHTML() {
     const P = S.cellPop; if (!P) return "";
@@ -362,7 +372,6 @@ export function startApp(root) {
     switch (k) {
       case "grade": return gradeHTML(it);
       case "shu": return cellPick(it, "shu", it.shu ? `<span class="chip" style="--c:var(--k-doc)">${esc(it.shu)}</span>` : '<span class="ecell"></span>');
-      case "ref": return cellPick(it, "ref", chipsHTML(it.ref, "var(--l-kata)"));
       case "genre": return cellPick(it, "genre", chipsHTML(it.genre, "var(--l-yoto)"));
       case "stage": return stageHTML(it);
       case "place": return `<span class="num">${esc(pathOf(it.table).join(" / "))}</span>`;
@@ -390,16 +399,16 @@ export function startApp(root) {
     const who = [it.author, it.handle].filter(Boolean).join("・");
     return `<div class="tcard" style="--c:${KINDC[k]}"><span class="tc-k">${esc(it.shu || "種類なし")}${who ? `・${esc(who)}` : ""}</span>${text ? `<p class="tc-b">${esc(text.slice(0, 220))}${text.length > 220 ? "…" : ""}</p>` : it.file ? `<p class="tc-f">${IC.file}${esc(it.file.name || "ファイル")}</p>` : ""}</div>`;
   }
-  const galHTML = it => `<button class="gcard" data-open="${it.id}">${it.shot ? shotHTML(it) : textCardHTML(it)}<div class="g-t">${esc(it.title)}</div>${it.a.why ? `<div class="g-why">${esc(it.a.why)}</div>` : ""}<div class="g-ft"><span class="chips">${gradeHTML(it, true)}${it.ref.slice(0, 2).map(x => `<span class="chip" style="--c:var(--l-kata)">${esc(x)}</span>`).join("")}</span>${stageHTML(it)}</div></button>`;
+  const galHTML = it => `<button class="gcard" data-open="${it.id}">${it.shot ? shotHTML(it) : textCardHTML(it)}<div class="g-t">${esc(it.title)}</div>${it.a.why ? `<div class="g-why">${esc(it.a.why)}</div>` : ""}<div class="g-ft"><span class="chips">${gradeHTML(it, true)}${it.tags.slice(0, 2).map(x => `<span class="chip" style="--c:var(--faint)">${esc(x)}</span>`).join("")}</span>${stageHTML(it)}</div></button>`;
   // スマホの一覧：表ではなく 1 件 1 枚のカードを縦に並べる
   const mrowHTML = it => `<div class="mrow ${S.sel.has(it.id) ? "sel" : ""}"><input type="checkbox" class="ck" data-ck="${it.id}" ${S.sel.has(it.id) ? "checked" : ""} aria-label="選ぶ">
       <button class="mrow-b" data-open="${it.id}">${it.shot ? `<img class="mrow-i" src="${esc(it.shot)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}<span class="mrow-w"><span class="nm">${esc(it.title)}</span>${it.a.why || it.excerpt ? `<span class="snip">${esc(it.a.why || it.excerpt)}</span>` : ""}
-        <span class="chips">${gradeHTML(it, true)}${it.shu ? `<span class="chip" style="--c:var(--k-doc)">${esc(it.shu)}</span>` : ""}${it.ref.slice(0, 2).map(x => `<span class="chip" style="--c:var(--l-kata)">${esc(x)}</span>`).join("")}${stageOf(it) ? "" : '<span class="stage none">未分析</span>'}</span>
+        <span class="chips">${gradeHTML(it, true)}${it.shu ? `<span class="chip" style="--c:var(--k-doc)">${esc(it.shu)}</span>` : ""}${it.tags.slice(0, 2).map(x => `<span class="chip" style="--c:var(--faint)">${esc(x)}</span>`).join("")}${stageOf(it) ? "" : '<span class="stage none">未分析</span>'}</span>
         <span class="mrow-p">${esc(pathOf(it.table).join(" / "))}・${esc(it.saved)}</span></span></button></div>`;
   function boardHTML(a, group) {
     let cols;
     if (group === "stage") cols = STAGES.map((n, i) => [n, a.filter(it => stageOf(it) === i)]);
-    else { cols = labelList("ref").map(k => [k, a.filter(it => it.ref.includes(k))]); cols.push(["参考ポイントが未設定", a.filter(it => !it.ref.length)]); }
+    else { cols = labelList("tag").map(k => [k, a.filter(it => it.tags.includes(k))]); cols.push(["ラベルが未設定", a.filter(it => !it.tags.length)]); }
     return `<div class="board">${cols.map(([n, its]) => `<div class="col"><div class="col-h">${esc(n)}<span class="n">${its.length}</span></div>
       ${its.map(it => `<button class="bcard" data-open="${it.id}"><span class="b-t">${esc(it.title)}</span><span class="g-ft">${gradeHTML(it, true)}<span class="num">${esc(pathOf(it.table).join(" / "))}</span></span></button>`).join("")}</div>`).join("")}</div>`;
   }
@@ -441,7 +450,6 @@ export function startApp(root) {
           <option value="ai:1">Claude に分析を頼む</option>
           <optgroup label="評価">${[5, 4, 3, 2, 1].map(g => `<option value="grade:${g}">${GRADE[g]}</option>`).join("")}<option value="grade:0">評価を外す</option></optgroup>
           <optgroup label="種類">${labelList("shu").map(v => `<option value="shu:${esc(v)}">${esc(v)}</option>`).join("")}</optgroup>
-          <optgroup label="参考ポイントを足す">${labelList("ref").map(v => `<option value="ref:${esc(v)}">${esc(v)}</option>`).join("")}</optgroup>
           <optgroup label="ジャンルを足す">${labelList("genre").map(v => `<option value="genre:${esc(v)}">${esc(v)}</option>`).join("")}</optgroup>
           <optgroup label="ラベルを足す">${labelList("tag").map(v => `<option value="tag:${esc(v)}">${esc(v)}</option>`).join("")}</optgroup></select>
         <select id="bulkPack" aria-label="入れる素材パック"><option value="">素材パックに入れる…</option>${coll.DATA.pack.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}<option value="new">＋ 新しい素材パック</option></select>
@@ -487,7 +495,7 @@ export function startApp(root) {
   }
   const zoomSeg = L => `<div class="seg lb-z">${[["fit", "幅に合わせる"], [150, "150%"], [200, "200%"], ["real", "原寸"]].map(([z, l]) => `<button class="${String(L.zoom) === String(z) ? "on" : ""}" data-lbz="${z}">${l}</button>`).join("")}</div>`;
   const markCtl = (L, hint) => `<label class="aitag ${L.mark ? "on" : ""}"><input type="checkbox" id="lbMark" ${L.mark ? "checked" : ""}>囲んで印を付ける</label>
-        ${L.mark ? `<select class="lsel mini" id="lbRef" aria-label="印の参考ポイント">${labelList("ref").map(r => `<option ${r === L.ref ? "selected" : ""}>${esc(r)}</option>`).join("")}</select>` : ""}
+        ${L.mark ? `<select class="lsel mini" id="lbRef" aria-label="印のラベル">${labelList("tag").map(r => `<option ${r === L.ref ? "selected" : ""}>${esc(r)}</option>`).join("")}</select>` : ""}
         <span class="lsub">${L.mark ? hint : ""}</span>`;
   function lbHTML() {
     const it = cur(); if (!S.lb || !it) return "";
@@ -538,7 +546,7 @@ export function startApp(root) {
     const meta = [it.author, yid ? "" : it.handle, ...ytInfo, `保存 ${it.saved}`, nums].filter(Boolean).map(esc).join('<span class="dot">・</span>');
     const markText = x => { let h = esc(x); it.hl.forEach(m => { if (!m.t) return; const e = esc(m.t); if (e && h.includes(e)) h = h.split(e).join(`<mark class="hl" title="${esc(m.r)}">${e}</mark>`); }); return h; };
     const hlTime = h => { if (!tr || !h.t) return ""; const l = tr.find(l => l.x.includes(h.t)); return l ? `<button class="tsc" data-seek="${l.s}" aria-label="${l.t} から再生">${l.t}</button>` : ""; };
-    const hlBar = `<div class="hlbar"><select class="lsel" id="hlRef" aria-label="線の参考ポイント">${labelList("ref").map(r => `<option>${esc(r)}</option>`).join("")}</select><button class="ghost" id="hlAdd">なぞったところに線を引く</button></div>`;
+    const hlBar = `<div class="hlbar"><select class="lsel" id="hlRef" aria-label="線のラベル">${labelList("tag").map(r => `<option>${esc(r)}</option>`).join("")}</select><button class="ghost" id="hlAdd">なぞったところに線を引く</button></div>`;
     const n = stageOf(it);
     const tableOpts = `${tableOf(it.table) ? "" : `<option value="" selected>未整理</option>`}${CFG.tables.map(t => `<option value="${t.id}" ${t.id === it.table ? "selected" : ""}>${esc(pathOf(t.id).join(" / "))}</option>`).join("")}`;
     const exf = it.shu && EXF[it.shu] ? fold("ex", `${it.shu}の欄`, undefined, `<div class="exg">${EXF[it.shu].map(k => `<label>${esc(k)}<input data-ex="${esc(k)}" value="${esc(it.ex[k] || "")}"></label>`).join("")}</div>`) : "";
@@ -563,7 +571,6 @@ export function startApp(root) {
      <div class="dt-props">
        <div class="pg"><span class="pl">評価</span>${gradeHTML(it)}</div>
        <div class="pg"><span class="pl">種類</span>${chipBtn("shu", it.shu ? `<span class="chip" style="--c:var(--k-doc)">${esc(it.shu)}</span>` : '<span class="add">＋ 選ぶ</span>')}</div>
-       <div class="pg"><span class="pl">参考ポイント</span>${chipBtn("ref", chips(it.ref, "var(--l-kata)"))}</div>
        <div class="pg"><span class="pl">ジャンル</span>${chipBtn("genre", chips(it.genre, "var(--l-yoto)"))}</div>
        <div class="pg"><span class="pl">ラベル</span>${chipBtn("tag", chips(it.tags, "var(--faint)"))}</div>
        <div class="pg"><span class="pl">場所</span><select class="lsel mini" id="moveTo" aria-label="置き場">${tableOpts}</select></div>
@@ -768,7 +775,7 @@ export function startApp(root) {
     if (q("#colBtn")) { S.colPop = !S.colPop; render(); return; }
     if (b = q("[data-colmv]")) { const [k, d] = b.dataset.colmv.split(":"); const i = CFG.cols.indexOf(k), j = i + +d; if (j >= 0 && j < CFG.cols.length) [CFG.cols[i], CFG.cols[j]] = [CFG.cols[j], CFG.cols[i]]; saveCfg(); render(); return; }
     if (q("#fClear")) { S.f = {}; S.q = ""; render(); return; }
-    if (b = q("[data-lbopen]")) { S.lb = { kind: b.dataset.lbopen, zoom: "fit", mark: false, side: store.get("swipe.lbside", true), ref: S.lb?.ref || labelList("ref")[0] }; render(); return; }
+    if (b = q("[data-lbopen]")) { S.lb = { kind: b.dataset.lbopen, zoom: "fit", mark: false, side: store.get("swipe.lbside", true), ref: S.lb?.ref || labelList("tag")[0] }; render(); return; }
     if (q("#lbClose")) { S.lb = null; render(); return; }
     if (b = q("[data-lbz]")) { S.lb.zoom = b.dataset.lbz; render(); return; }
     if (b = q("[data-step]")) { stepOpen(+b.dataset.step); return; }
@@ -776,9 +783,10 @@ export function startApp(root) {
     if (q("#navBtn")) { S.navOn = !S.navOn; render(); return; }
     if (t.id === "scrim" || q("#dtClose")) { S.open = null; S.lb = null; render(); return; }
     if (b = q("[data-newlabel]")) {
-      const key = b.dataset.newlabel; const v = prompt(`${LABEL_KEYS[key]}に足す値`); if (!v || !v.trim()) return;
-      CFG.labels[key] = uniq([...(CFG.labels[key] || []), v.trim()]); saveCfg();
-      const it = b.dataset.for ? ITEMS.find(x => x.id === b.dataset.for) : cur(); if (it) { if (key === "shu") it.shu = v.trim(); else { const field = key === "tag" ? "tags" : key; it[field] = uniq([...it[field], v.trim()]); } changed(it, 0); }
+      const key = b.dataset.newlabel; const raw = prompt(`${LABEL_KEYS[key]}に足す値`); if (!raw || !raw.trim()) return;
+      const v = pickLabel(key, raw); if (!v) return;
+      CFG.labels[key] = key === "tag" ? D.uniqLabels([...(CFG.labels[key] || []), v]) : uniq([...(CFG.labels[key] || []), v]); saveCfg();
+      const it = b.dataset.for ? ITEMS.find(x => x.id === b.dataset.for) : cur(); if (it) { if (key === "shu") it.shu = v; else { const field = key === "tag" ? "tags" : key; it[field] = uniq([...it[field], v]); } changed(it, 0); }
       render(); return;
     }
     if (b = q("[data-pk]")) { const it = cur(); it[b.dataset.pk] = toggle(it[b.dataset.pk], b.dataset.v); changed(it, 300); render(); return; }
@@ -818,7 +826,7 @@ export function startApp(root) {
     if (t.id === "bulkSet" && t.value) {
       const i = t.value.indexOf(":"), k = t.value.slice(0, i), v = t.value.slice(i + 1);
       const sel = ITEMS.filter(it => S.sel.has(it.id));
-      const NAME = { ai: "Claude に分析を頼む", grade: "評価", shu: "種類", ref: "参考ポイント", genre: "ジャンル", tag: "ラベル" };
+      const NAME = { ai: "Claude に分析を頼む", grade: "評価", shu: "種類", genre: "ジャンル", tag: "ラベル" };
       sel.forEach(it => {
         if (k === "ai") it.ai = true;
         else if (k === "grade") it.star = +v;
@@ -918,7 +926,12 @@ export function startApp(root) {
       await coll.load().catch(err => toast(err.message));
       ITEMS = items;
       let dirty = false;
-      if (cfg && cfg.v) CFG = { ...DEFAULT_SETTINGS(), ...cfg, labels: { ...DEFAULT_SETTINGS().labels, ...(cfg.labels || {}) }, coll: { ...DEFAULT_COLL(), ...(cfg.coll || {}) } };
+      if (cfg && cfg.v) { CFG = { ...DEFAULT_SETTINGS(), ...cfg, labels: { ...DEFAULT_SETTINGS().labels, ...(cfg.labels || {}) }, coll: { ...DEFAULT_COLL(), ...(cfg.coll || {}) } };
+      // 2026-10-30：参考ポイントはラベルに統一。前に保存した設定の参考ポイントの値・列・ビューもラベルへ寄せる
+      CFG.labels = { ...CFG.labels, tag: D.uniqLabels([...(CFG.labels.ref || []), ...(CFG.labels.tag || [])]) }; delete CFG.labels.ref;
+      CFG.cols = (CFG.cols || []).filter(c => c !== "ref");
+      CFG.views = (CFG.views || []).map(v => v.group === "ref" ? { ...v, group: "tag", name: v.name === "参考ポイントごと" ? "ラベルごと" : v.name } : v);
+      }
       else dirty = true; // 初回：既定のフォルダと表を置く
       if (cfg && cfg.v && !cfg.coll) dirty = true; // 素材パックと共有ページの既定のフォルダと表を置く
       if (ensureMonth(D.monthTableId())) dirty = true;
