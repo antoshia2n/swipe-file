@@ -4,6 +4,7 @@
  * 形はデモ 8 のサイドパネルそのまま。保存までの操作は「保存する」1 回（撮り方・ラベルは前回のまま）。
  */
 import * as D from "./data.js";
+import { bulletEdit, cleanBullets } from "../lib/bullets.js";
 
 const GRADE = { 5: "S", 4: "A", 3: "B", 2: "C", 1: "D" };
 const esc = s => String(s ?? "").replace(/[&<>"]/g, c => ({ "&": "&amp;", "<": "&lt;", ">": "&gt;", '"': "&quot;" }[c]));
@@ -24,7 +25,7 @@ export function startPanel(root) {
   const S = {
     ext: false, page: null, err: "", loading: true,
     mode: store.get("swipe.pn.mode", "post"), thread: true,
-    grade: 0, refs: new Set(store.get("swipe.pn.refs", [])), memo: "", table: "",
+    grade: 0, refs: new Set(store.get("swipe.pn.refs", [])), made: [], memo: "", table: "",
     busy: false, file: null, fileObj: null, items: [], cfg: null, saved: null,
     yt: null, // YouTube を見ているとき { id, state: wait|ok|none|old, data, og }
   };
@@ -81,7 +82,9 @@ export function startPanel(root) {
   const tables = () => (S.cfg?.tables || []);
   const tableName = id => { const t = tables().find(x => x.id === id); if (!t) { const m = /^(x|yt)-(\d{4})-(\d{2})$/.exec(id || ""); return m ? `${m[1] === "x" ? "Xポスト" : "YouTube"} / ${m[2]}年 / ${+m[3]}月` : "未整理"; } const fs = S.cfg.folders || []; const p = []; let f = fs.find(x => x.id === t.folder); while (f) { p.unshift(f.name); f = fs.find(x => x.id === f.parent); } return [...p, t.name].join(" / "); };
   // 2026-10-30：参考ポイントはラベルに統一。前の参考ポイントの値もラベルの候補に入れる
-  const refList = () => D.uniqLabels([...(S.cfg?.labels?.ref || []), ...(S.cfg?.labels?.tag || REF_DEFAULT), ...S.items.flatMap(i => i.tags)]);
+  const refList = () => D.uniqLabels([...(S.cfg ? S.cfg.labels?.tag || [] : REF_DEFAULT), ...S.items.flatMap(i => i.tags), ...S.made]);
+  // 覚えている選び方のうち、いま無いラベル（画面で消したもの）は付けない
+  const pickedRefs = () => { const ok = new Set(refList()); return [...S.refs].filter(x => ok.has(x)); };
   function autoTable({ isX, url, isPdf }) {
     if (isX) return D.monthTableId();
     if (D.ytId(url)) return D.monthTableId(undefined, "yt");
@@ -98,8 +101,8 @@ export function startPanel(root) {
     const opts = `<option value="">自動：${esc(tableName(auto))}</option>${tables().map(t => `<option value="${t.id}" ${S.table === t.id ? "selected" : ""}>${esc(tableName(t.id))}</option>`).join("")}`;
     return `<div class="dest"><div>保存先</div><select class="lsel mini" id="pnTable" aria-label="保存先">${opts}</select></div>
       <div class="frow"><span class="dt-h" style="margin:0">評価</span><select class="grade g${S.grade}" id="pnGrade" aria-label="評価">${["", 5, 4, 3, 2, 1].map(v => `<option value="${v}" ${String(v) === String(S.grade || "") ? "selected" : ""}>${v ? GRADE[v] : "―"}</option>`).join("")}</select><span class="lsub">空でもよい</span></div>
-      <div><div class="dt-h">ラベル<span>AI に借りてほしいところ。前回の選び方を覚えておく</span></div><div class="pick">${refList().map(x => `<button class="pk ${S.refs.has(x) ? "on" : ""}" style="--c:var(--l-kata)" data-ref="${esc(x)}">${esc(x)}</button>`).join("")}</div></div>
-      <div><div class="dt-h">ひとこと<span>空でもよい・分析の「言語化」に入る</span></div><textarea class="pn-in" id="pnMemo" placeholder="なぜ目に止まったか（あとで書いてもよい）">${esc(S.memo)}</textarea></div>`;
+      <div><div class="dt-h">ラベル<span>AI に借りてほしいところ</span></div><div class="pick">${refList().map(x => `<button class="pk ${S.refs.has(x) ? "on" : ""}" style="--c:var(--l-kata)" data-ref="${esc(x)}">${esc(x)}</button>`).join("")}<span class="pk-new"><input id="pnNewLabel" placeholder="新しいラベル" aria-label="新しいラベル"><button class="pk" id="pnAddLabel" title="ラベルを作って付ける">＋</button></span></div></div>
+      <div><div class="dt-h">メモ<span>空でもよい・分析の「言語化」に入る</span></div><textarea class="pn-in pn-memo" id="pnMemo" placeholder="- なぜ目に止まったか&#10;  - 気づいたこと">${esc(S.memo)}</textarea><div class="pn-hint">Enter で次の行も箇条書き・Tab で一段下げる・Shift+Tab で戻す・空の行で Enter を押すと印が外れる</div></div>`;
   }
   function pageBox() {
     if (!S.ext) return `<div class="box"><div class="box-h">見ているページを保存</div><div class="warnline">この画面は、拡張機能「スワイプくんパネル」のサイドパネルの中で開くと、見ているページ（X のポストやスレッド、販売ページなど）をそのまま取り込めます。いまは下から画像や PDF を入れられます。</div></div>`;
@@ -165,7 +168,7 @@ export function startPanel(root) {
     const props = { yt: { id: Y.id, len: d.len || 0, cap: lines.length ? (d.cap || "字幕") : "", ...(short ? { short: true } : {}) } };
     const ogp = { title: d.title || og.title || P.ogTitle || "", description: "", image: D.ytThumb(Y.id), author: d.channel || og.author || "" };
     const table = S.table || autoTable({ isX: false, url });
-    return D.createItem({ url, body: D.transcriptBody(lines), ogp, props, why: S.memo, table, grade: S.grade, refs: [...S.refs] });
+    return D.createItem({ url, body: D.transcriptBody(lines), ogp, props, why: cleanBullets(S.memo), table, grade: S.grade, refs: pickedRefs() });
   }
   async function fillTranscript() {
     const P = S.page, Y = S.yt, d = Y.data || {};
@@ -226,7 +229,7 @@ export function startPanel(root) {
         f = { url: P.url, ogp: { title: P.ogTitle || P.title, description: P.desc } };
       }
       const table = S.table || autoTable({ isX: !!X, url: P.url });
-      const it = await D.createItem({ ...f, why: S.memo, table, grade: S.grade, refs: [...S.refs], file: { kind: "img", url: shotUrl, name: "shot.png" } });
+      const it = await D.createItem({ ...f, why: cleanBullets(S.memo), table, grade: S.grade, refs: pickedRefs(), file: { kind: "img", url: shotUrl, name: "shot.png" } });
       S.saved = S.page.url; afterSave(it);
     } catch (e) { S.busy = false; render(); toast(e.message); }
   }
@@ -238,7 +241,7 @@ export function startPanel(root) {
       const url = await D.uploadFile(S.fileObj);
       const P = S.ext ? S.page : null;
       const table = S.table || autoTable({ isX: false, url: P?.url, isPdf });
-      const it = await D.createItem({ url: P?.url || "", ogp: P ? { title: P.ogTitle || P.title, description: P.desc } : null, why: S.memo, table, grade: S.grade, refs: [...S.refs], file: { kind: isPdf ? "pdf" : "img", url, name: S.fileObj.name } });
+      const it = await D.createItem({ url: P?.url || "", ogp: P ? { title: P.ogTitle || P.title, description: P.desc } : null, why: cleanBullets(S.memo), table, grade: S.grade, refs: pickedRefs(), file: { kind: isPdf ? "pdf" : "img", url, name: S.fileObj.name } });
       S.file = null; S.fileObj = null; afterSave(it);
     } catch (e) { S.busy = false; render(); toast(e.message); }
   }
@@ -253,6 +256,7 @@ export function startPanel(root) {
     const q = s => e.target.closest(s); let b;
     if (b = q("[data-cap]")) { S.mode = b.dataset.cap; store.set("swipe.pn.mode", S.mode); render(); return; }
     if (b = q("[data-thr]")) { S.thread = b.dataset.thr === "1"; render(); return; }
+    if (q("#pnAddLabel")) { addLabel(); return; }
     if (b = q("[data-ref]")) { const v = b.dataset.ref; S.refs.has(v) ? S.refs.delete(v) : S.refs.add(v); render(); return; }
     if (q("#pnSave")) { savePage(); return; }
     if (q("#pnFill")) { fillTranscript(); return; }
@@ -267,6 +271,25 @@ export function startPanel(root) {
     if (t.id === "pnFile" && t.files[0]) setFile(t.files[0]);
   });
   root.addEventListener("input", e => { if (e.target.id === "pnMemo") S.memo = e.target.value; });
+  function addLabel() {
+    const n = document.getElementById("pnNewLabel"); const raw = (n?.value || "").normalize("NFKC").replace(/\s+/g, " ").trim(); if (!raw) return;
+    const same = refList().find(x => D.labelKey(x) === D.labelKey(raw)); const v = same || raw;
+    if (!same) S.made.push(v);
+    S.refs.add(v); store.set("swipe.pn.refs", [...S.refs]); render();
+    toast(same ? `「${same}」がもうあるので、それを付けました` : `「${v}」を作って付けました`);
+    setTimeout(() => document.getElementById("pnNewLabel")?.focus(), 0);
+  }
+  root.addEventListener("keydown", e => {
+    const t = e.target;
+    if (t.id === "pnNewLabel" && e.key === "Enter" && !e.isComposing) { e.preventDefault(); addLabel(); return; }
+    if (t.id !== "pnMemo" || e.isComposing || e.metaKey || e.ctrlKey || e.altKey) return;
+    if (e.key === "Enter" && e.shiftKey) return;
+    if (t.value === "" && (e.key === "Enter" || e.key === "Tab")) return;
+    const r = bulletEdit(t.value, t.selectionStart, t.selectionEnd, e.key, e.shiftKey); if (!r) return;
+    e.preventDefault(); t.value = r.value; S.memo = r.value; t.setSelectionRange(r.pos, r.posEnd ?? r.pos);
+  });
+  // 空のメモに入ったら「- 」から始める
+  root.addEventListener("focusin", e => { const t = e.target; if (t.id === "pnMemo" && !t.value) { t.value = "- "; S.memo = t.value; t.setSelectionRange(2, 2); } });
   root.addEventListener("dragover", e => { const d = e.target.closest?.("#drop"); if (d) { e.preventDefault(); d.classList.add("over"); } });
   root.addEventListener("dragleave", e => { const d = e.target.closest?.("#drop"); if (d) d.classList.remove("over"); });
   root.addEventListener("drop", e => { const d = e.target.closest?.("#drop"); if (!d) return; e.preventDefault(); setFile([...e.dataTransfer.files][0]); });
