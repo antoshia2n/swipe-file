@@ -213,7 +213,9 @@ export function startPanel(root) {
   async function savePage() {
     if (S.busy || !S.page) return;
     S.busy = true; render();
-    if (S.yt) { try { const it = await saveYt(); S.saved = S.page.url; afterSave(it); } catch (e) { S.busy = false; render(); toast(e.message); } return; }
+    // 2026-11-01 撮る間にタブが読めないページへ移ると S.page が空になる。保存できたのに失敗と出て二重に保存しないよう、先に住所を控える
+    const pageUrl = S.page.url;
+    if (S.yt) { try { const it = await saveYt(); S.saved = pageUrl; afterSave(it); } catch (e) { S.busy = false; render(); toast(e.message); } return; }
     try {
       const g = await ask("grab", { mode: S.page.x ? S.mode : (S.mode === "post" ? "screen" : S.mode), thread: S.thread }, 90000);
       const shotUrl = await D.uploadFile(await dataUrlToFile(g.shot, "shot.png"));
@@ -230,7 +232,7 @@ export function startPanel(root) {
       }
       const table = S.table || autoTable({ isX: !!X, url: P.url });
       const it = await D.createItem({ ...f, why: cleanBullets(S.memo), table, grade: S.grade, refs: pickedRefs(), file: { kind: "img", url: shotUrl, name: "shot.png" } });
-      S.saved = S.page.url; afterSave(it);
+      S.saved = pageUrl; afterSave(it);
     } catch (e) { S.busy = false; render(); toast(e.message); }
   }
   async function saveFile() {

@@ -69,15 +69,19 @@ export function createColl(x) {
 
   /* ── 保存（打つたびに送らず、まとめて送る） ── */
   const timers = new Map();
+  const waiting = new Map(); // 2026-11-01 送る前のもの（ログアウトの前にすぐ送れるように中身も持つ）
+  async function send(key) {
+    timers.delete(key); const w = waiting.get(key); if (!w) return true; waiting.delete(key); const [k, obj] = w; x.setSaving(1);
+    try { await (k === "pack" ? D.savePack(obj) : D.saveShare(obj)); obj.upd = D.shortDate(new Date().toISOString()); return true; }
+    catch (e) { x.toast(e.message); return false; } finally { x.setSaving(-1); }
+  }
   function queue(k, obj, wait = 700) {
-    const key = k + obj.id; clearTimeout(timers.get(key));
-    timers.set(key, setTimeout(async () => {
-      timers.delete(key); x.setSaving(1);
-      try { await (k === "pack" ? D.savePack(obj) : D.saveShare(obj)); obj.upd = D.shortDate(new Date().toISOString()); }
-      catch (e) { x.toast(e.message); } finally { x.setSaving(-1); }
-    }, wait));
+    const key = k + obj.id; clearTimeout(timers.get(key)); waiting.set(key, [k, obj]);
+    timers.set(key, setTimeout(() => send(key), wait));
   }
   const pending = () => timers.size > 0;
+  // 2026-11-01 待っている保存をすぐ送る。送れなかったものがあれば false
+  async function flush() { timers.forEach(clearTimeout); timers.clear(); return (await Promise.all([...waiting.keys()].map(send))).every(Boolean); }
 
   async function load() {
     const [p, s] = await Promise.all([D.loadPacks(), D.loadShares()]);
@@ -273,7 +277,7 @@ export function createColl(x) {
     if (b = q("[data-crm]")) { toggleMember(k, o.id, b.dataset.crm); x.render(); return true; }
     if (q("#cDel")) {
       if (!U.delArm) { U.delArm = true; x.render(); return true; }
-      clearTimeout(timers.get(k + o.id)); timers.delete(k + o.id); x.setSaving(1);
+      clearTimeout(timers.get(k + o.id)); timers.delete(k + o.id); waiting.delete(k + o.id); x.setSaving(1);
       (k === "pack" ? D.deletePack(o.id) : D.deleteShare(o.id)).then(() => { DATA[k] = DATA[k].filter(p => p.id !== o.id); st.open = null; U.delArm = false; x.render(); x.toast("消しました"); })
         .catch(e => x.toast(e.message)).finally(() => x.setSaving(-1));
       return true;
@@ -330,5 +334,5 @@ export function createColl(x) {
     return false;
   }
 
-  return { load, DATA, missing, LABEL, mainHTML, addTo, memberOf, toggleMember, onClick, onInput, onChange, onDblClick, onEscape, pending, open: (k, id) => { CS[k].open = id; } };
+  return { load, DATA, missing, LABEL, mainHTML, addTo, memberOf, toggleMember, onClick, onInput, onChange, onDblClick, onEscape, pending, flush, open: (k, id) => { CS[k].open = id; } };
 }
