@@ -151,8 +151,8 @@ export function startApp(root) {
       },
       keys: [["くわしくの窓", "j ／ k", "次へ／前へ"], ["窓", "Esc", "閉じる"], ["足す窓", "⌘／Ctrl＋V", "画像や PDF を貼り付ける"]],
       tours: makeTours({ go: shellGo }),
-      // 2026-11-01 ログアウトの前に待っている保存を送り切る。送れなかったものがあれば止める
-      beforeSignOut: async () => flushAll(),
+      // 2026-11-01 ログアウトの前に待っている保存を送り切る。送れなかったものがあれば止める（10 秒で打ち切り・続けて 2 回目からは聞く）
+      beforeSignOut: async () => flushForSignOut(),
     });
     shell.attach(root.querySelector(".shell-slot"));
   } catch (_) { /* 外枠が出せなくてもアプリは動かす */ }
@@ -224,6 +224,15 @@ export function startApp(root) {
     const r = await Promise.all([...[...unsent.keys()].map(id => track(sendItem(id))), track(sendCfg()), commitRemove(), coll.flush()]);
     await Promise.all([...inflight]);
     return r.every(Boolean) && !unsent.size && !cfgDirty;
+  }
+  // 2026-11-01 送れない状態が続いてもログアウトできるように。10 秒で終わらなければ失敗とみなし、続けて 2 回目からは保存せずに出るかを聞く
+  let signOutFails = 0;
+  async function flushForSignOut() {
+    let t;
+    const ok = await Promise.race([flushAll(), new Promise(r => { t = setTimeout(() => r(false), 10000); })]).catch(() => false).finally(() => clearTimeout(t));
+    if (ok) { signOutFails = 0; return true; }
+    if (++signOutFails < 2) return false;
+    return window.confirm("保存できていない変更があります。保存せずにログアウトしますか？") ? true : "cancel";
   }
   addEventListener("beforeunload", e => { if (timers.size || unsent.size || cfgDirty || S.saving > 0 || pendingDel || coll?.pending()) { e.preventDefault(); e.returnValue = ""; } });
 
