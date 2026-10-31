@@ -151,6 +151,8 @@ export function startApp(root) {
       },
       keys: [["くわしくの窓", "j ／ k", "次へ／前へ"], ["窓", "Esc", "閉じる"], ["足す窓", "⌘／Ctrl＋V", "画像や PDF を貼り付ける"]],
       tours: makeTours({ go: shellGo }),
+      // 2026-11-01 ログアウトの前に待っている保存を送り切る。送れなかったものがあれば止める（10 秒で打ち切り・続けて 2 回目からは聞く）
+      beforeSignOut: async () => flushForSignOut(),
     });
     shell.attach(root.querySelector(".shell-slot"));
   } catch (_) { /* 外枠が出せなくてもアプリは動かす */ }
@@ -196,19 +198,43 @@ export function startApp(root) {
 
   /* ── 保存（打つたびに送らず、少し待ってまとめて送る） ── */
   const timers = new Map();
+  // 2026-11-01 送る前と、送れなかったスワイプをここに預かる（次に同じものを直したとき・ログアウトの前・閉じる前の確かめで拾う）
+  const unsent = new Map(), inflight = new Set();
+  const track = p => { inflight.add(p); p.finally(() => inflight.delete(p)); return p; };
+  async function sendItem(id) {
+    timers.delete(id); const it = unsent.get(id); if (!it) return true; unsent.delete(id); setSaving(1);
+    try { await D.saveItem(it); return true; } catch (e) { if (!unsent.has(id)) unsent.set(id, it); toast(e.message); return false; } finally { setSaving(-1); }
+  }
   function queueSave(it, wait = 700) {
-    clearTimeout(timers.get(it.id));
-    timers.set(it.id, setTimeout(async () => {
-      timers.delete(it.id); setSaving(1);
-      try { await D.saveItem(it); } catch (e) { toast(e.message); } finally { setSaving(-1); }
-    }, wait));
+    clearTimeout(timers.get(it.id)); unsent.set(it.id, it);
+    timers.set(it.id, setTimeout(() => track(sendItem(it.id)), wait));
   }
-  let cfgTimer = null;
+  let cfgTimer = null, cfgDirty = false; // 2026-11-01 設定も送れなかったら印を残す
+  async function sendCfg() {
+    cfgTimer = null; if (!cfgDirty) return true; cfgDirty = false; setSaving(1);
+    try { await D.saveSettings(CFG); return true; } catch (e) { cfgDirty = true; toast(e.message); return false; } finally { setSaving(-1); }
+  }
   function saveCfg() {
-    clearTimeout(cfgTimer);
-    cfgTimer = setTimeout(async () => { setSaving(1); try { await D.saveSettings(CFG); } catch (e) { toast(e.message); } finally { setSaving(-1); } }, 500);
+    clearTimeout(cfgTimer); cfgDirty = true;
+    cfgTimer = setTimeout(() => track(sendCfg()), 500);
   }
-  addEventListener("beforeunload", e => { if (timers.size || S.saving > 0 || pendingDel || coll?.pending()) { e.preventDefault(); e.returnValue = ""; } });
+  // 2026-11-01 ログアウトの前に、待っている保存・設定・消す確定をすぐ送り、送っている途中のものも待つ。送れなかったものが残れば false
+  async function flushAll() {
+    timers.forEach(clearTimeout); timers.clear(); clearTimeout(cfgTimer);
+    const r = await Promise.all([...[...unsent.keys()].map(id => track(sendItem(id))), track(sendCfg()), commitRemove(), coll.flush()]);
+    await Promise.all([...inflight]);
+    return r.every(Boolean) && !unsent.size && !cfgDirty;
+  }
+  // 2026-11-01 送れない状態が続いてもログアウトできるように。10 秒で終わらなければ失敗とみなし、続けて 2 回目からは保存せずに出るかを聞く
+  let signOutFails = 0;
+  async function flushForSignOut() {
+    let t;
+    const ok = await Promise.race([flushAll(), new Promise(r => { t = setTimeout(() => r(false), 10000); })]).catch(() => false).finally(() => clearTimeout(t));
+    if (ok) { signOutFails = 0; return true; }
+    if (++signOutFails < 2) return false;
+    return window.confirm("保存できていない変更があります。保存せずにログアウトしますか？") ? true : "cancel";
+  }
+  addEventListener("beforeunload", e => { if (timers.size || unsent.size || cfgDirty || S.saving > 0 || pendingDel || coll?.pending()) { e.preventDefault(); e.returnValue = ""; } });
 
   /* ── フォルダと表 ───────────────────────────────────── */
   const tableOf = id => CFG.tables.find(t => t.id === id);
@@ -718,18 +744,19 @@ export function startApp(root) {
 
   /* ── 消す（数秒は元に戻せる。確定したら置き場のファイルも消す） ── */
   let pendingDel = null;
+  // 2026-11-01 ログアウトの前に待てるよう、確定の結果（true／false）を返す
   function commitRemove() {
-    const P = pendingDel; if (!P) return; pendingDel = null; clearTimeout(P.timer);
+    const P = pendingDel; if (!P) return Promise.resolve(true); pendingDel = null; clearTimeout(P.timer);
     setSaving(1);
-    D.deleteItem(P.it.id)
+    return track(D.deleteItem(P.it.id)
       .then(() => D.removeFiles([P.it.props?.shot, P.it.file?.url].filter(Boolean)))
-      .catch(err => { ITEMS.splice(Math.min(P.idx, ITEMS.length), 0, P.it); render(); toast(err.message); })
-      .finally(() => setSaving(-1));
+      .then(() => true, err => { ITEMS.splice(Math.min(P.idx, ITEMS.length), 0, P.it); render(); toast(err.message); return false; })
+      .finally(() => setSaving(-1)));
   }
   function removeWithUndo(it) {
     if (!it) return;
     commitRemove(); // 前に消したものは、ここで確定する
-    clearTimeout(timers.get(it.id)); timers.delete(it.id);
+    clearTimeout(timers.get(it.id)); timers.delete(it.id); unsent.delete(it.id); // 2026-11-01 預かっていた保存も捨てる（消したものを送り直さない）
     const idx = ITEMS.findIndex(x => x.id === it.id);
     ITEMS = ITEMS.filter(x => x.id !== it.id); S.open = null; S.lb = null; S.sel.delete(it.id); render();
     pendingDel = { it, idx, timer: setTimeout(commitRemove, 6000) };
