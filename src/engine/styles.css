@@ -709,3 +709,23 @@ tr:hover .grade.g0,.grade.g0:focus{color:var(--faint);border-color:var(--line);b
 .pn-app .pk-new .pk{width:28px;padding:0;display:grid;place-items:center}
 .pn-app .pn-memo::placeholder{color:var(--faint)}
 .pn-app .pn-hint{font-size:12px}
+
+/* シアニンパネルの細い画面の洗練（2026-11-02 Naoki「シアニンパネルの各アプリの UI を洗練」） */
+.pn-app .pn-bar{padding:8px 12px;gap:8px}
+.pn-state{display:inline-flex;align-items:center;gap:6px;font-size:12.5px;font-weight:600;color:var(--muted);min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.pn-state i{width:7px;height:7px;border-radius:50%;background:var(--ok,#10b981);flex:none}
+.pn-app .pn{padding:12px}
+.pn-app .box{padding:14px;gap:12px}
+.pn-app .box-h{font-size:12.5px;color:var(--fg);font-weight:800}
+.pn-app .box-h span{font-weight:600;color:var(--faint);font-size:12px}
+.pn-thr{display:flex;align-items:center;justify-content:space-between;gap:8px;font-size:12.5px;color:var(--muted)}
+.pn-thr b{color:var(--fg)}
+.seg{display:inline-flex;background:var(--soft);border:1px solid var(--line);border-radius:8px;padding:2px;gap:1px}
+.seg button{border:0;background:transparent;border-radius:6px;padding:4px 10px;font-size:12px;font-weight:600;color:var(--muted);white-space:nowrap}
+.seg button.on{background:var(--panel);color:var(--fg);box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.pn-app .tparts{background:var(--soft);border-radius:10px;padding:4px;gap:2px}
+.pn-app .tparts div{background:transparent;padding:6px 8px}
+.pn-app .tparts div+div{border-top:1px solid var(--hair)}
+.pn-app .cap{gap:6px}
+.pn-app .pn-hint{font-size:12px;color:var(--faint);margin-top:4px}
+
