@@ -28,7 +28,7 @@ async function rest(env, path, init = {}) {
 }
 
 const CSS = `
-:root{--bg:#f5f0eb;--panel:#fff;--soft:#f7f3ee;--line:#e6dfd6;--fg:#1a1a1a;--muted:#6b6259;--faint:#a8a09a;--accent:#f59e0b;--accent-ink:#b45309;--ink:#1a1a1a;--on-ink:#fff;--shot-line:#ece6de;--shot-sub:#6b6259;
+:root{--bg:#f5f0eb;--panel:#fff;--soft:#f7f3ee;--line:#e6dfd6;--fg:#1a1a1a;--muted:#6b6259;--faint:#736a62;--accent:#f59e0b;--accent-ink:#b45309;--ink:#1a1a1a;--on-ink:#fff;--shot-line:#ece6de;--shot-sub:#6b6259;
   --f:"Geist","Hiragino Sans","Hiragino Kaku Gothic ProN","Noto Sans JP",system-ui,sans-serif;--mono:"Geist Mono",ui-monospace,Menlo,monospace}
 @media (prefers-color-scheme:dark){:root{--bg:#1b1916;--panel:#24211d;--soft:#2b2823;--line:#38332c;--fg:#f1ece6;--muted:#b0a69b;--faint:#7d746a;--accent:#fbbf24;--accent-ink:#fbbf24;--ink:#f1ece6;--on-ink:#1b1916;--shot-line:#38332c;--shot-sub:#b0a69b;color-scheme:dark}}
 *{box-sizing:border-box}html,body{margin:0}body{background:var(--bg);color:var(--fg);font-family:var(--f);font-size:15px;-webkit-font-smoothing:antialiased}

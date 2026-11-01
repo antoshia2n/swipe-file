@@ -1,7 +1,7 @@
 /* 並び：上に画面の切り替え｜左のメニュー（フォルダと表）｜表のタブ → ビューのタブ → 中身｜右から出るくわしくの窓。色と字は思考整理くんにそろえる */
 :root{
   --bg:#f5f0eb; --panel:#ffffff; --soft:#f7f3ee; --hair:#f3eee8; --line:#e6dfd6;
-  --fg:#1a1a1a; --muted:#6b6259; --faint:#a8a09a; --rowhover:#fffbf5;
+  --fg:#1a1a1a; --muted:#6b6259; --faint:#736a62; --rowhover:#fffbf5;
   --accent:#f59e0b; --accent-ink:#b45309; --accent-bg:#fef3c7; --accent-line:#fcd34d; --accent-soft:rgba(245,158,11,.2);
   --ink:#1a1a1a; --on-ink:#ffffff; --ok:#047857; --star:#f59e0b; --star-off:#e2d9cd;
   --shadow:0 1px 2px rgba(60,40,20,.05),0 8px 24px rgba(60,40,20,.09);
