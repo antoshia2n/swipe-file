@@ -29,7 +29,7 @@ export function startPanel(root) {
     busy: false, file: null, fileObj: null, items: [], cfg: null, saved: null,
     yt: null, // YouTube を見ているとき { id, state: wait|ok|none|old, data, og }
   };
-  root.innerHTML = `<div id="app" class="pn-app"><div class="pn-bar"><div class="brand" style="font-size:14px">スワイプくん<span>.</span></div><span class="lsub" id="pnState" style="margin-left:auto"></span><a class="ghost" href="/" target="_blank" rel="noopener">一覧を開く</a></div><div class="pn" id="pn"></div></div><div class="toast" id="toast" hidden></div>`;
+  root.innerHTML = `<div id="app" class="pn-app"><div class="pn-bar"><span class="pn-state" id="pnState"></span><a class="ghost" href="/" target="_blank" rel="noopener" style="margin-left:auto">一覧を開く ↗</a></div><div class="pn" id="pn"></div></div><div class="toast" id="toast" hidden></div>`;
   const $ = s => root.querySelector(s);
   const pn = $("#pn");
   const toast = msg => { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => (t.hidden = true), 3200); };
@@ -102,7 +102,7 @@ export function startPanel(root) {
     return `<div class="dest"><div>保存先</div><select class="lsel mini" id="pnTable" aria-label="保存先">${opts}</select></div>
       <div class="frow"><span class="dt-h" style="margin:0">評価</span><select class="grade g${S.grade}" id="pnGrade" aria-label="評価">${["", 5, 4, 3, 2, 1].map(v => `<option value="${v}" ${String(v) === String(S.grade || "") ? "selected" : ""}>${v ? GRADE[v] : "―"}</option>`).join("")}</select><span class="lsub">空でもよい</span></div>
       <div><div class="dt-h">ラベル<span>AI に借りてほしいところ</span></div><div class="pick">${refList().map(x => `<button class="pk ${S.refs.has(x) ? "on" : ""}" style="--c:var(--l-kata)" data-ref="${esc(x)}">${esc(x)}</button>`).join("")}<span class="pk-new"><input id="pnNewLabel" placeholder="新しいラベル" aria-label="新しいラベル"><button class="pk" id="pnAddLabel" title="ラベルを作って付ける">＋</button></span></div></div>
-      <div><div class="dt-h">メモ<span>空でもよい・分析の「言語化」に入る</span></div><textarea class="pn-in pn-memo" id="pnMemo" placeholder="- なぜ目に止まったか&#10;  - 気づいたこと">${esc(S.memo)}</textarea><div class="pn-hint">Enter で次の行も箇条書き・Tab で一段下げる・Shift+Tab で戻す・空の行で Enter を押すと印が外れる</div></div>`;
+      <div><div class="dt-h">メモ<span>空でもよい・分析の「言語化」に入る</span></div><textarea class="pn-in pn-memo" id="pnMemo" placeholder="- なぜ目に止まったか&#10;  - 気づいたこと">${esc(S.memo)}</textarea><div class="pn-hint">Enter で次の行も箇条書き・Tab で一段下げる</div></div>`;
   }
   function pageBox() {
     if (!S.ext) return `<div class="box"><div class="box-h">見ているページを保存</div><div class="warnline">この画面は、拡張機能「スワイプくんパネル」のサイドパネルの中で開くと、見ているページ（X のポストやスレッド、販売ページなど）をそのまま取り込めます。いまは下から画像や PDF を入れられます。</div></div>`;
@@ -119,8 +119,7 @@ export function startPanel(root) {
       const nums = [m.like && `いいね ${m.like}`, m.rt && `RT ${m.rt}`, m.view && `表示 ${m.view}`].filter(Boolean);
       return `<div class="box"><div class="box-h">このポストを保存<span>${dup ? "保存済み" : "自動で読み取った"}</span></div>${dupLine}
         <div class="xs-h"><div class="av" style="--c:var(--k-x)">${esc((m.name || m.handle || "X").slice(0, 1))}</div><div><div class="xs-n">${esc(m.name)}</div><div class="xs-u">@${esc(m.handle)}${m.time ? `・${esc(D.shortDate(m.time))}` : ""}</div></div></div>
-        ${X.thread.length > 1 ? `<div class="thread"><div><b>スレッドを見つけた（本人の続きをあわせて ${X.thread.length} 件）</b></div>
-          <div class="pick"><button class="pk ${S.thread ? "on" : ""}" data-thr="1">まとめて 1 件にする</button><button class="pk ${!S.thread ? "on" : ""}" data-thr="0">この 1 件だけ</button></div></div>` : ""}
+        ${X.thread.length > 1 ? `<div class="pn-thr"><span>スレッド <b>${X.thread.length}</b> 件</span><div class="seg" role="group" aria-label="スレッドの保存のしかた"><button class="${S.thread ? "on" : ""}" aria-pressed="${S.thread}" data-thr="1">まとめて 1 件</button><button class="${!S.thread ? "on" : ""}" aria-pressed="${!S.thread}" data-thr="0">この 1 件だけ</button></div></div>` : ""}
         <div class="tparts">${posts.map((p, i) => `<div>${posts.length > 1 ? `<span>${i + 1}/${posts.length}</span>` : ""}${esc(p.text.length > 160 ? p.text.slice(0, 160) + "…" : p.text) || '<span>（本文なし・画像だけ）</span>'}</div>`).join("")}</div>
         ${nums.length ? `<div class="auto">${nums.map(n => `<span>${esc(n)}</span>`).join("")}</div>` : ""}
         <div><div class="dt-h">スクショの撮り方</div><div class="cap">${capBtn("post", "ポストだけ")}${capBtn("screen", "見えている範囲")}${capBtn("crop", "範囲を選ぶ")}</div><div class="dt-h" style="margin:6px 0 0;font-weight:500">${capNote[S.mode]}</div></div>
@@ -199,7 +198,7 @@ export function startPanel(root) {
   function render() {
     const ta = document.activeElement?.id === "pnMemo" ? $("#pnMemo").selectionStart : null;
     pn.innerHTML = pageBox() + dropBox() + recentBox();
-    $("#pnState").textContent = S.ext ? (S.page ? `${S.page.site} を見ています` : "") : "拡張機能の外";
+    $("#pnState").innerHTML = S.ext ? (S.page ? `<i aria-hidden="true"></i>${esc(S.page.site)} を見ています` : "") : "拡張機能の外";
     if (ta !== null) { const n = $("#pnMemo"); if (n) { n.focus(); n.setSelectionRange(ta, ta); } }
   }
 
