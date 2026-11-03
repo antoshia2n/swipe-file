@@ -1,6 +1,6 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
-import { AuthGuard } from "shia2n-core";
+import { AuthGuard } from "shia2n-core/lite.js";
 import { APP_ID, APP_NAME } from "./constants.js";
 import App from "./App.jsx";
 import Panel from "./Panel.jsx";

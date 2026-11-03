@@ -5,7 +5,7 @@
  *
  * 1 件の形（画面の中）と、表 sw_swipes の 1 行の形の対応はこのファイルだけに書く。
  */
-import { supabase, auth } from "shia2n-core";
+import { supabase, auth } from "shia2n-core/lite.js";
 import { deriveTitle, deriveExcerpt } from "../lib/titling.js";
 import { toJapanese } from "../lib/errors.js";
 
