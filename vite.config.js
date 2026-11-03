@@ -16,8 +16,9 @@ export default defineConfig({
     rollupOptions: {
       output: {
         manualChunks: {
-          firebase: ["firebase/app", "firebase/auth", "firebase/firestore"],
-          supabase: ["@supabase/supabase-js"],
+          // 2026-11-03：shia2n-core の軽い入口（lite.js）に乗り換えた
+          firebase: ["firebase/app", "firebase/auth", "firebase/firestore/lite"],
+          supabase: ["@supabase/postgrest-js"],
         },
       },
     },

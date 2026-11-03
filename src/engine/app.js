@@ -8,7 +8,7 @@
 import * as D from "./data.js";
 import { createColl, DEFAULT_COLL } from "./coll.js";
 import { loadPdf } from "./pdfpages.js";
-import { mountAppShell } from "shia2n-core";
+import { mountAppShell } from "shia2n-core/lite.js";
 import { makeTours } from "./tours.js";
 
 /* ── 決まった値 ───────────────────────────────────────── */
