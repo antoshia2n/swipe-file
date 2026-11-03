@@ -110,7 +110,7 @@ export function startPanel(root) {
     if (!S.page) return `<div class="box"><div class="box-h">見ているページを保存</div><div class="warnline">${esc(S.err || "このページは読めません")}</div><button class="ghost" id="pnRetry">もう一度読む</button></div>`;
     const P = S.page, X = P.x;
     if (S.yt) return ytBox(P);
-    // 同じポスト・ページがもう保存されていたら知らせる（二重に保存しないため。保存は止めない）
+    // 同じポスト・ページがもう保存されていたら知らせる（二重に保存しないため。2 件目は小さなボタンからだけ・2026-11-03）
     const dup = D.findSame(S.items, X ? `https://x.com/${X.main.handle}/status/${X.main.id}` : P.url);
     const dupLine = dup ? `<div class="dup">保存済み（${esc(dup.saved)}・${esc(tableName(dup.table))}）<a class="ghost" href="/?open=${encodeURIComponent(dup.id)}" target="_blank" rel="noopener">開く</a></div>` : "";
     if (X) {
@@ -124,14 +124,14 @@ export function startPanel(root) {
         ${nums.length ? `<div class="auto">${nums.map(n => `<span>${esc(n)}</span>`).join("")}</div>` : ""}
         <div><div class="dt-h">スクショの撮り方</div><div class="cap">${capBtn("post", "ポストだけ")}${capBtn("screen", "見えている範囲")}${capBtn("crop", "範囲を選ぶ")}</div><div class="dt-h" style="margin:6px 0 0;font-weight:500">${capNote[S.mode]}</div></div>
         ${fieldsHTML(true, P.url)}
-        <button class="ink save" id="pnSave" ${S.busy ? "disabled" : ""}>${S.busy ? "保存しています…" : dup ? "もう一度保存する" : "保存する"}</button></div>`;
+        ${saveButtons(dup, S.busy ? "保存しています…" : "保存する", S.busy)}</div>`;
     }
     const mode = S.mode === "post" ? "screen" : S.mode;
     return `<div class="box"><div class="box-h">このページを保存<span>${esc(P.site)}</span></div>${dupLine}
       <div><div class="xs-n" style="font-size:13.5px">${esc(P.ogTitle || P.title || P.url)}</div>${P.desc ? `<div class="warnline" style="margin-top:4px">${esc(P.desc.slice(0, 140))}</div>` : ""}</div>
       <div><div class="dt-h">スクショの撮り方</div><div class="cap" style="grid-template-columns:repeat(2,1fr)">${capBtn("screen", "見えている範囲")}${capBtn("crop", "範囲を選ぶ")}</div><div class="dt-h" style="margin:6px 0 0;font-weight:500">${capNote[mode]}　ページ全体は GoFullPage で撮って下へ落とす。</div></div>
       ${fieldsHTML(false, P.url)}
-      <button class="ink save" id="pnSave" ${S.busy ? "disabled" : ""}>${S.busy ? "保存しています…" : dup ? "もう一度保存する" : "保存する"}</button></div>`;
+      ${saveButtons(dup, S.busy ? "保存しています…" : "保存する", S.busy)}</div>`;
   }
   function ytBox(P) {
     const Y = S.yt, d = Y.data || {}, og = Y.og || {};
@@ -157,7 +157,7 @@ export function startPanel(root) {
       <div class="yt-card"><img src="${esc(D.ytThumb(Y.id))}" alt="" referrerpolicy="no-referrer"><div><div class="xs-n" style="font-size:13.5px">${esc(title)}</div>${who ? `<div class="xs-u">${esc(who)}</div>` : ""}</div></div>
       <div class="yt-st ${st[0]}">${esc(st[1])}</div>
       ${fieldsHTML(false, P.url)}
-      <button class="ink save" id="pnSave" ${S.busy || wait ? "disabled" : ""}>${S.busy ? "保存しています…" : wait ? "文字起こしを待っています…" : dup ? "もう一度保存する" : "保存する"}</button></div>`;
+      ${saveButtons(dup, S.busy ? "保存しています…" : wait ? "文字起こしを待っています…" : "保存する", S.busy || wait)}</div>`;
   }
   async function saveYt() {
     const P = S.page, Y = S.yt, d = Y.data || {}, og = Y.og || {};
@@ -187,6 +187,12 @@ export function startPanel(root) {
     return `<div class="box"><div class="box-h">手元の画像や PDF を入れる<span>${S.ext && S.page ? "ページのリンクを付ける" : "どのページでも"}</span></div>
       <div class="drop ${F ? "has" : ""}" id="drop">${F ? `${IC.file}<span>${esc(F.name)}</span><button class="icon" id="pnFileX" aria-label="外す">${IC.x}</button>` : `GoFullPage の画像や PDF、⌘⇧4 で撮ったスクショを、ここへドラッグするか ⌘V で貼る。<br><label class="lnk">ファイルを選ぶ<input type="file" id="pnFile" accept="image/*,application/pdf" hidden></label>`}</div>
       ${F ? `<button class="ink save" id="pnFileSave" ${S.busy ? "disabled" : ""}>${S.busy ? "保存しています…" : "これを保存する"}</button>` : ""}</div>`;
+  }
+  // 2026-11-03：保存済みのときは、大きなボタンを「保存済みを開く」にし、2 件目は下の小さなボタンからだけ（うっかり二重に保存しないため）
+  function saveButtons(dup, label, disabled) {
+    if (!dup) return `<button class="ink save" id="pnSave" ${disabled ? "disabled" : ""}>${label}</button>`;
+    return `<a class="ink save" href="/?open=${encodeURIComponent(dup.id)}" target="_blank" rel="noopener">保存済みを開く ↗</a>
+      <button class="ghost" id="pnSave" style="align-self:center" ${disabled ? "disabled" : ""}>${S.busy ? "保存しています…" : "別にもう 1 件保存"}</button>`;
   }
   function recentBox() {
     const todo = S.items.filter(it => !["why", "hypo", "idea"].some(k => (it.a[k] || "").trim())).length;

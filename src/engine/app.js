@@ -694,7 +694,7 @@ export function startApp(root) {
         <label>言語化（なぜ良いか・あとで書いてもよい）<textarea id="adWhy" rows="2">${esc(A.why)}</textarea></label>
         <label>置き場<select id="adTable">${opts}</select></label>
       </div>
-      <div class="m-foot"><span class="lsub">${A.busy ? "保存しています…" : "リンク・本文・ファイルのどれか 1 つがあれば保存できる"}</span><button class="ink" id="adSave" ${A.busy ? "disabled" : ""}>保存する</button></div></div>`;
+      <div class="m-foot"><span class="lsub">${A.busy ? "保存しています…" : "リンク・本文・ファイルのどれか 1 つがあれば保存できる"}</span><button class="ink" id="adSave" ${A.busy ? "disabled" : ""}>${A.dupArmed && A.dupArmed === A.url.trim() ? "別にもう 1 件保存する" : "保存する"}</button></div></div>`;
   }
 
   /* ── 素材パックと共有ページ（coll.js） ───────────────────── */
@@ -778,6 +778,9 @@ export function startApp(root) {
   async function saveAdd() {
     const A = S.add;
     if (!A.url.trim() && !A.body.trim() && !A.fileObj) { toast("リンク・本文・ファイルのどれか 1 つを入れてください"); return; }
+    // 2026-11-03：保存済みのリンクは、もう一度押したときだけ 2 件目を保存する（うっかり二重に保存しないため）
+    const same = A.url.trim() ? D.findSame(ITEMS, A.url.trim()) : null;
+    if (same && A.dupArmed !== A.url.trim()) { A.dupArmed = A.url.trim(); render(); toast("このリンクは保存済みです。別にもう 1 件保存するときだけ、もう一度押してください"); return; }
     A.busy = true; render();
     try {
       let file = null;
