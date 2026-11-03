@@ -239,6 +239,30 @@ export async function fetchOgp(url) {
   } catch { return null; }
 }
 
+/**
+ * note 記事の、誰でも読める部分の本文を取る（2026-11-03 開発部・/api/note-body）。取れなければ ""。
+ * 画像はその位置に「［画像］住所」が入る
+ */
+export async function fetchNoteBody(url) {
+  try {
+    const user = auth.currentUser;
+    if (!user || detectSourceType(url) !== "note") return "";
+    const token = await user.getIdToken();
+    const res = await fetch("/api/note-body", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ url }) });
+    const j = await res.json();
+    return j?.fetched && typeof j.body === "string" ? j.body : "";
+  } catch { return ""; }
+}
+
+/** 本文が空の note 記事か（本文を埋める対象） */
+export const needsNoteBody = it => it?.src === "note" && !(it.body || "").trim() && detectSourceType(it.url) === "note";
+
+/** 本文の欄だけを埋める。ほかの欄には触らず、すでに本文が入っていれば何もしない */
+export async function fillBody(id, body) {
+  const rows = await run(supabase.from(TABLE).update({ body }).eq("id", id).is("body", null).select("id"), "本文を保存できませんでした");
+  return (rows ?? []).length > 0;
+}
+
 export async function uploadFile(file) {
   const user = auth.currentUser;
   if (!user) throw new Error("ログイン状態を確認できませんでした。ページを再読み込みしてください");
@@ -261,8 +285,10 @@ export async function uploadFile(file) {
  */
 export async function createItem(f) {
   const url = (f.url || "").trim();
-  const body = (f.body || "").trim();
+  let body = (f.body || "").trim();
   const isPdf = f.file?.kind === "pdf";
+  // 2026-11-03：note 記事は、本文が無ければ誰でも読める部分を取って入れる（取れなければ空のまま保存する）
+  if (!body && !isPdf && detectSourceType(url) === "note") body = (await fetchNoteBody(url)).trim();
   const src = detectSourceType(url, { hasBody: !!body, isPdf });
   let og = f.ogp || null;
   // X の題名は「名前 (@id) on X」でポストの中身ではない。本文は説明文の側に入っているので、そちらを使う

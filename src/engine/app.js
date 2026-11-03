@@ -1031,6 +1031,18 @@ export function startApp(root) {
       if (openId && ITEMS.some(x => x.id === openId)) { S.open = openId; history.replaceState(null, "", location.pathname); }
     } catch (e) { S.err = e.message || "読み込めませんでした"; }
     S.loading = false; render();
+    if (!S.err) fillNoteBodies();
+  }
+  // 2026-11-03：本文が空の note 記事（前に保存したもの）を、裏で 1 件ずつ埋める。本文の欄にだけ書き、空のときだけ書く
+  async function fillNoteBodies() {
+    const todo = ITEMS.filter(D.needsNoteBody).slice(0, 40);
+    let n = 0;
+    for (const it of todo) {
+      const body = await D.fetchNoteBody(it.url);
+      if (!body) continue;
+      try { if (await D.fillBody(it.id, body)) { it.body = body; n++; } } catch { /* 次に開いたときにまた試す */ }
+    }
+    if (n) { render(); toast(`note 記事 ${n} 件に本文を入れました`); }
   }
   boot();
   return () => { document.removeEventListener("paste", onPaste); document.removeEventListener("keydown", onKey); removeEventListener("message", onYtMsg); ytHold.remove(); };
