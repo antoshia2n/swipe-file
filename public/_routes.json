@@ -1,9 +1,14 @@
 {
   "version": 1,
   "include": [
-    "/api/*",
-    "/diag",
-    "/s/*"
+    "/*"
   ],
-  "exclude": []
+  "exclude": [
+    "/apple-touch-icon*",
+    "/assets/*",
+    "/favicon*",
+    "/icons/*",
+    "/manifest*",
+    "/stable/*"
+  ]
 }
