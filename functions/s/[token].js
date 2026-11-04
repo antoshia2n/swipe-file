@@ -100,8 +100,14 @@ export async function onRequestGet(context) {
 
   let sh;
   // 出すのは Naoki が作った共有だけ（2026-10-27 作業 58。前は誰の共有でも「シアニンのスワイプ」として出た）
-  const owner = encodeURIComponent(env.SWIPE_SHARE_OWNER ?? "VrMwzeSceqWeXVQOrm8kpu4uVR33");
-  try { [sh] = await rest(env, `sw_shares?token=eq.${encodeURIComponent(token)}&user_id=eq.${owner}&select=*&limit=1`); }
+  const ownerUid = env.SWIPE_SHARE_OWNER ?? "VrMwzeSceqWeXVQOrm8kpu4uVR33";
+  // 2026-11-04 場所：Naoki が持ち主の場所で作った共有も出す（持ち主の列が場所の番号になるため・X攻略くんの共有と同じ）
+  let owners = [ownerUid];
+  try {
+    const ws = await rest(env, `ws_members?select=workspace_id&firebase_uid=eq.${encodeURIComponent(ownerUid)}&role=eq.owner&limit=100`);
+    if (Array.isArray(ws)) owners = owners.concat(ws.map(w => w.workspace_id).filter(id => /^ws_[0-9a-f]{32}$/.test(id)));
+  } catch { /* 場所の一覧が読めなくても、Naoki 本人の共有は出す */ }
+  try { [sh] = await rest(env, `sw_shares?token=eq.${encodeURIComponent(token)}&user_id=in.(${owners.map(encodeURIComponent).join(",")})&select=*&limit=1`); }
   catch (e) { return message("いまページを開けません。少し時間をおいてもう一度開いてください。", 503, e.message); }
   if (!sh) return message(NOT_FOUND, 404);
   if (!sh.live) return message("このページは公開を止めています。", 410);
