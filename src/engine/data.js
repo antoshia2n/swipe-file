@@ -5,9 +5,22 @@
  *
  * 1 件の形（画面の中）と、表 sw_swipes の 1 行の形の対応はこのファイルだけに書く。
  */
-import { supabase, auth } from "shia2n-core/lite.js";
+import { supabase, auth, getWorkspace, setWorkspace } from "shia2n-core/lite.js";
 import { deriveTitle, deriveExcerpt } from "../lib/titling.js";
 import { toJapanese } from "../lib/errors.js";
+
+/* ── 場所（ワークスペース・2026-11-04）：自分の場所＝これまでのデータ。みんなの場所＝入っている人だけ（X攻略くんと同じ） ── */
+export { getWorkspace, setWorkspace };
+// 入っている場所の一覧（自分の場所は含まない）。読めなかったときは null（今の場所を勝手に外さないため）
+export async function loadWorkspaces() {
+  const u = auth?.currentUser; if (!u) return null;
+  try {
+    const res = await fetch("/api/workspaces", { headers: { Authorization: "Bearer " + (await u.getIdToken()) } });
+    const j = await res.json().catch(() => ({}));
+    return res.ok && j.ok && Array.isArray(j.workspaces) ? j.workspaces : null;
+  } catch (_) { return null; }
+}
+export const myName = () => (auth?.currentUser?.displayName || "").trim() || "自分";
 
 export const TABLE = "sw_swipes";
 export const SETTINGS_TABLE = "sw_settings";

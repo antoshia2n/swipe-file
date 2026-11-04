@@ -8,6 +8,7 @@
  */
 
 import { createDbGateway } from "shia2n-core/server/db-gateway.js";
+import { resolveWorkspaceOwner } from "shia2n-core/server/workspace.js";
 import { canUseSwipe } from "../../_lib/swipe-access.js";
 
 // 使える人：SWIPE_ALLOW_UID（無ければ Naoki）に加えて、門番が swipe-file を開けると答えた人（2026-10-27 作業 58）
@@ -25,6 +26,8 @@ export const onRequest = async context => {
 const makeGateway = allowUids => createDbGateway({
   allowUids,
   basePath: "/api/db",
+  // 2026-11-04 場所（ワークスペース）：見出し X-Workspace があれば、入っている場所の番号を持ち主にする。無ければ本人（X攻略くんと同じ）
+  resolveOwner: resolveWorkspaceOwner,
   tables: {
     sw_swipes:   { owner: "user_id" },
     sw_settings: { owner: "user_id" },  // フォルダ・表・ビュー・列・ラベルの値（1 人 1 行）

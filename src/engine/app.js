@@ -86,7 +86,11 @@ const IC = {
 export function startApp(root) {
   let ITEMS = [];
   let CFG = DEFAULT_SETTINGS();
-  const remembered = store.get("swipe.ui.v1", {});
+  // 場所（2026-11-04）：入っている場所の一覧と、いま開いている場所（空なら自分の場所）
+  let WS = [], CURWS = D.getWorkspace(), wsOpen = false;
+  // 開いていた画面・フォルダ・表は場所ごとに覚える（場所が違うとフォルダと表も別のため）
+  const UI_KEY = CURWS ? `swipe.ui.v1.${CURWS}` : "swipe.ui.v1";
+  const remembered = store.get(UI_KEY, {});
   const S = {
     loading: true, err: "", scr: ["app", "pack", "share"].includes(remembered.scr) ? remembered.scr : "app",
     loc: remembered.loc || "all", table: remembered.table || null, view: remembered.view || "v1",
@@ -97,6 +101,7 @@ export function startApp(root) {
   root.innerHTML = `<div id="app">
     <div class="top gut">
       <div class="brand">${BRAND_ICON}<span class="brand-t">スワイプくん<span>.</span></span></div>
+      <div class="wsm" id="wsm" hidden></div>
       <nav class="hm" aria-label="機能"><button data-scr="app">スワイプ</button><button data-scr="pack">素材パック</button><button data-scr="share">共有ページ</button></nav>
       <div class="top-r"><span class="lsub" id="saveState"></span><button class="ink" id="addBtn" aria-label="足す">＋<span class="add-t"> 足す</span></button><span class="shell-slot"></span></div>
     </div>
@@ -191,9 +196,31 @@ export function startApp(root) {
   }
   addEventListener("message", onYtMsg);
 
+  /* ── 場所の切り替え（左上・2026-11-04・X攻略くんと同じ形）。入っている場所が無い人には出さない ── */
+  const wsName = id => id ? (WS.find(w => w.id === id)?.name || "場所") : D.myName();
+  function renderWs(focus) {
+    const el = $("#wsm"); if (!el) return;
+    if (!WS.length) { el.hidden = true; el.innerHTML = ""; return; }
+    const items = [{ id: "", name: D.myName(), sub: "自分の場所" }, ...WS.map(w => ({ id: w.id, name: w.name, sub: w.role === "owner" ? "みんなの場所・持ち主" : "みんなの場所" }))];
+    const on = it => (it.id || null) === CURWS;
+    el.hidden = false;
+    el.innerHTML = `<button class="wsbtn ${CURWS ? "shared" : ""}" data-ws="menu" aria-haspopup="menu" aria-expanded="${wsOpen}" aria-label="場所を切り替える（今は${esc(wsName(CURWS))}）"><span class="wsdot" aria-hidden="true"></span><span class="wsname">${esc(wsName(CURWS))}</span><span aria-hidden="true">▾</span></button>
+      ${wsOpen ? `<div class="wslist" role="menu" aria-label="場所">${items.map(it => `<button role="menuitemradio" aria-checked="${on(it)}" class="wsit ${on(it) ? "on" : ""}" data-ws="go" data-id="${esc(it.id)}"><span class="wsit-n">${esc(it.name)}</span><span class="wsit-s">${it.sub}</span>${on(it) ? `<span class="wsit-c" aria-hidden="true">✓</span>` : ""}</button>`).join("")}<div class="wsnote">場所を替えると、見るデータが入れ替わる（ほかの場所のデータは混ざらない）</div></div>` : ""}`;
+    if (focus) (wsOpen ? el.querySelector(".wsit.on") : el.querySelector(".wsbtn"))?.focus();
+  }
+  function closeWs(focus) { if (!wsOpen) return false; wsOpen = false; renderWs(focus); return true; }
+  async function goWs(next) {
+    wsOpen = false;
+    if (next === CURWS) { renderWs(true); return; }
+    // 書きかけを今の場所へ送り切ってから替える。送れなかったら替えない（書きかけを捨てない）
+    let tm; const ok = await Promise.race([flushAll(), new Promise(r => { tm = setTimeout(() => r(false), 10000); })]).catch(() => false).finally(() => clearTimeout(tm));
+    if (ok !== true) { renderWs(true); toast("保存が終わっていないので、場所はまだ替えていない。少しおいてもう一度"); return; }
+    D.setWorkspace(next); location.reload();
+  }
+
   function toast(msg) { const t = $("#toast"); t.textContent = msg; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => (t.hidden = true), 3200); }
   function toastUndo(msg) { const t = $("#toast"); t.innerHTML = `<span>${esc(msg)}</span><button id="toastUndo" class="tundo">元に戻す</button>`; t.hidden = false; clearTimeout(toast.h); toast.h = setTimeout(() => (t.hidden = true), 6000); }
-  function remember() { store.set("swipe.ui.v1", { scr: S.scr, loc: S.loc, table: S.table, view: S.view }); }
+  function remember() { store.set(UI_KEY, { scr: S.scr, loc: S.loc, table: S.table, view: S.view }); }
   function setSaving(d) { S.saving += d; const el = $("#saveState"); if (el) el.textContent = S.saving > 0 ? "保存中…" : ""; }
 
   /* ── 保存（打つたびに送らず、少し待ってまとめて送る） ── */
@@ -809,6 +836,8 @@ export function startApp(root) {
   const main0 = () => { const m = screen.querySelector("#main"); if (m) m.scrollTop = 0; };
   root.addEventListener("click", e => {
     const t = e.target, q = s => t.closest(s); let b;
+    if (b = q("[data-ws]")) { if (b.dataset.ws === "menu") { wsOpen = !wsOpen; renderWs(true); } else goWs(b.dataset.id || null); return; }
+    if (wsOpen && !q("#wsm")) closeWs(false); // 場所のメニューは外を押すと閉じる
     if (q("#addBtn")) { openAdd(); return; }
     if (b = q("[data-scr]")) { if (S.scr !== b.dataset.scr) { S.scr = b.dataset.scr; S.open = null; S.lb = null; S.cellPop = null; S.sel.clear(); render(); main0(); } return; }
     if (q("#toastUndo")) { undoRemove(); $("#toast").hidden = true; return; }
@@ -996,6 +1025,8 @@ export function startApp(root) {
       if (e.key === "j" || e.key === "ArrowDown") { e.preventDefault(); stepOpen(1); return; }
       if (e.key === "k" || e.key === "ArrowUp") { e.preventDefault(); stepOpen(-1); return; }
     }
+    if (e.key === "Escape" && wsOpen) { closeWs(true); return; }
+    if (e.key === "Tab" && wsOpen && !document.activeElement?.closest?.(".wslist")) closeWs(false);
     if (e.key === "Escape" && S.lb) { S.lb = null; render(); return; }
     if (e.key === "Escape" && S.scr !== "app") { if (coll.onEscape()) render(); return; }
     if (e.key === "Escape") { if (S.modal && !S.add?.busy) { S.modal = null; S.add = null; render(); } else if (S.cellPop) { S.cellPop = null; render(); } else if (S.colPop) { S.colPop = false; render(); } else if (S.fPop) { S.fPop = false; render(); } else if (S.open) { S.open = null; render(); } } };
@@ -1011,6 +1042,12 @@ export function startApp(root) {
   async function boot() {
     S.loading = true; S.err = ""; render();
     try {
+      // 場所の一覧を先に読む。抜けた場所を開こうとしていたら自分の場所へ戻す（入っていない場所は出入り口が断るため）
+      const wsList = await D.loadWorkspaces();
+      // 一覧が読めなかったとき（通信の切れ目など）は今の場所のまま。名前が分からないので「場所」と出す
+      WS = wsList || (CURWS ? [{ id: CURWS, name: "場所", role: "editor" }] : []);
+      if (wsList && CURWS && !WS.some(w => w.id === CURWS)) { D.setWorkspace(null); location.reload(); return; }
+      renderWs(false);
       const [items, cfg] = await Promise.all([D.loadItems(), D.loadSettings()]);
       // 素材パックと共有ページは、読めなくてもスワイプの画面は出す
       await coll.load().catch(err => toast(err.message));
