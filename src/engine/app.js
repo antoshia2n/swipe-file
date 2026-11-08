@@ -11,6 +11,7 @@ import { loadPdf } from "./pdfpages.js";
 import { mountAppShell } from "shia2n-core/lite.js";
 import { makeTours } from "./tours.js";
 import { qh, onGuide } from "./guide.js";
+import { ask } from "./ask.js";
 
 /* ── 決まった値 ───────────────────────────────────────── */
 const GRADE = { 5: "S", 4: "A", 3: "B", 2: "C", 1: "D" };
@@ -104,7 +105,7 @@ export function startApp(root) {
       <div class="brand">${BRAND_ICON}<span class="brand-t">スワイプくん<span>.</span></span></div>
       <div class="wsm" id="wsm" hidden></div>
       <nav class="hm" aria-label="機能"><button data-scr="app">スワイプ</button><button data-scr="pack">素材パック</button><button data-scr="share">共有ページ</button></nav>
-      <div class="top-r"><span class="lsub" id="saveState"></span><button class="ink" id="addBtn" aria-label="足す">＋<span class="add-t"> 足す</span></button><span class="add-q"></span><span class="shell-slot"></span></div>
+      <div class="top-r"><span class="lsub" id="saveState"></span><button class="ink" id="addBtn" aria-label="追加">＋<span class="add-t"> 追加</span></button><span class="add-q"></span><span class="shell-slot"></span></div>
     </div>
     <div class="screen" id="screen"></div>
   </div><div class="toast" id="toast" hidden></div>`;
@@ -124,13 +125,13 @@ export function startApp(root) {
       manual: {
         intro: "X のポスト・note・販売ページや教材など、参考になる見本を保存して、なぜ良いかを言語化しておくアプリ。分析は 言語化 → 仮説 → 用途抽出 の 3 段で書きます。",
         sections: [
-          { title: "足す", items: [
-            { t: "スワイプを足す", d: "右上の「＋ 足す」から。リンク・本文・画像か PDF のどれか 1 つがあれば保存できます。見出しは空ならリンク先の題名か本文の書き出しから付きます" },
-            { t: "画像や PDF を入れる", d: "足す窓に落とすか、貼り付けます（⌘／Ctrl＋V）", keys: ["⌘／Ctrl＋V"] },
+          { title: "追加", items: [
+            { t: "スワイプを追加", d: "右上の「＋ 追加」から。リンク・本文・画像か PDF のどれか 1 つがあれば保存できます。見出しは空ならリンク先の題名か本文の書き出しから付きます" },
+            { t: "画像や PDF を入れる", d: "追加の窓に落とすか、貼り付けます（⌘／Ctrl＋V）", keys: ["⌘／Ctrl＋V"] },
             { t: "置き場", d: "既定は自動です（X と YouTube は今月の表・note は記事・PDF は教材PDF・ほかは開いている表）。同じリンクがもう保存されていたら知らせます" },
           ] },
           { title: "探す・絞る", items: [
-            { t: "左のメニュー", d: "すべて・未分析・フォルダから選びます。フォルダは「＋」で足せます" },
+            { t: "左のメニュー", d: "すべて・未分析・フォルダから選びます。フォルダは「＋」で追加できます" },
             { t: "探す", d: "上の欄で、本文・分析・投稿者の言葉で探します" },
             { t: "絞り込み", d: "種類・ラベル・評価・ジャンル・分析で絞ります。「＋ ビュー」で、いまの絞り込みをビューとして残せます" },
           ] },
@@ -155,7 +156,7 @@ export function startApp(root) {
           ] },
         ],
       },
-      keys: [["くわしくの窓", "j ／ k", "次へ／前へ"], ["窓", "Esc", "閉じる"], ["足す窓", "⌘／Ctrl＋V", "画像や PDF を貼り付ける"]],
+      keys: [["くわしくの窓", "j ／ k", "次へ／前へ"], ["窓", "Esc", "閉じる"], ["追加の窓", "⌘／Ctrl＋V", "画像や PDF を貼り付ける"]],
       tours: makeTours({ go: shellGo }),
       // 2026-11-01 ログアウトの前に待っている保存を送り切る。送れなかったものがあれば止める（10 秒で打ち切り・続けて 2 回目からは聞く）
       beforeSignOut: async () => flushForSignOut(),
@@ -338,14 +339,14 @@ export function startApp(root) {
       + `<div class="lgbar"><input id="lgNewLabel" placeholder="新しいラベル"><button class="ghost" id="lgAddLabel">＋ ラベル</button><span class="lg-sp"></span><input id="lgNewGroup" placeholder="新しい分類（例：型・素材・中身）"><button class="ghost" id="lgAddGroup">＋ 分類</button></div>
       <div class="lgs">${tagGroups().map(box).join("")}</div></div>`;
   }
-  /* ラベルを足すときの重複よけ（2026-10-30）：同じものは今あるほうを使う。似た名前は足す前に確かめる */
-  function pickLabel(key, raw) {
+  /* ラベルを追加するときの重複よけ（2026-10-30）：同じものは今あるほうを使う。似た名前は追加する前に確かめる（2026-11-08 アプリの窓で聞く） */
+  async function pickLabel(key, raw) {
     const v = String(raw).normalize("NFKC").replace(/\s+/g, " ").trim(); if (!v) return null;
     const list = labelList(key); const k = D.labelKey(v);
     const same = list.find(x => D.labelKey(x) === k);
     if (same) { toast(`「${same}」がもうあるので、それを使いました`); return same; }
     const near = list.filter(x => { const xk = D.labelKey(x); return Math.min(xk.length, k.length) >= 2 && (xk.includes(k) || k.includes(xk)); });
-    if (near.length && !confirm(`「${near.join("」「")}」と似ています。別のラベルとして「${v}」を足しますか？\n（キャンセルで足さない）`)) return null;
+    if (near.length && !(await ask({ title: `「${v}」を追加しますか？`, message: `「${near.join("」「")}」と似ています。別のラベルとして追加します。`, ok: "追加" }))) return null;
     return v;
   }
 
@@ -420,7 +421,7 @@ export function startApp(root) {
       ${nv("ai", "Claude に頼んだ分析", cnt(it => it.ai), { c: "var(--k-doc)" })}
       ${un ? nv("unsorted", "未整理（置き場なし）", un, { c: "var(--k-lp)" }) : ""}
       ${nv("labels", "ラベルを整える", rawTags().length, { c: "var(--l-kata)" })}
-      <div class="nh"><span>フォルダ${qh("folder", "margin:0 auto 0 6px;width:16px;height:16px")}</span><button id="addFolder" aria-label="フォルダを足す" title="フォルダを足す">＋</button></div>
+      <div class="nh"><span>フォルダ${qh("folder", "margin:0 auto 0 6px;width:16px;height:16px")}</span><button id="addFolder" aria-label="フォルダを追加" title="フォルダを追加">＋</button></div>
       ${tree(null, 0)}
     </div></nav>`;
   }
@@ -436,7 +437,7 @@ export function startApp(root) {
       <div class="fcards">${subs.map(s => { const ts = tablesIn(s.id); return `<button class="fcard" data-loc="f:${s.id}"><div class="fc-t">${IC.folder}${esc(s.name)}</div>
         <div class="chips">${ts.map(t => `<span class="chip">${esc(t.name)}</span>`).join("")}</div>
         <div class="fc-s">表 ${ts.length} 枚・${ITEMS.filter(it => ts.some(t => t.id === it.table)).length} 件</div></button>`; }).join("")}
-        <button class="fcard" id="addTable" data-folder="${esc(fid)}"><div class="fc-t">＋ 表を足す</div><div class="fc-s">このフォルダの直下に表を作る</div></button></div></div>`;
+        <button class="fcard" id="addTable" data-folder="${esc(fid)}"><div class="fc-t">＋ 表を追加</div><div class="fc-s">このフォルダの直下に表を作る</div></button></div></div>`;
   }
   function labelSels(F, attr) {
     const sel = (key, label, opts) => `<select class="fsel ${F[key] !== undefined && F[key] !== "" && F[key] !== 0 ? "on" : ""}" data-${attr}="${key}" aria-label="${label}"><option value="">${label}</option>${opts.map(o => `<option value="${esc(o[0])}" ${String(F[key] ?? "") === String(o[0]) ? "selected" : ""}>${esc(o[1])}</option>`).join("")}</select>`;
@@ -461,8 +462,8 @@ export function startApp(root) {
     const has = v => P.key === "shu" ? it.shu === v : it[field].includes(v);
     return `<div class="cpop" id="cpop" role="dialog" aria-label="${LABEL_KEYS[P.key]}"><div class="cp-h">${LABEL_KEYS[P.key]}${P.key === "shu" ? "（1 つ選ぶ）" : "（いくつでも）"}</div>
       ${P.key === "tag" && LG().length
-        ? tagGroups().filter(x => x[1].length).map(([g, ls]) => `<div class="cp-g">${esc(g ? g.name : "分類なし")}</div><div class="pick">${ls.map(v => `<button class="pk ${has(v) ? "on" : ""}" data-cpv="${esc(v)}">${esc(v)}</button>`).join("")}</div>`).join("") + `<div class="pick"><button class="pk" data-newlabel="tag" data-for="${it.id}" title="選べる値を足す">＋</button></div>`
-        : `<div class="pick">${labelList(P.key).map(v => `<button class="pk ${has(v) ? "on" : ""}" data-cpv="${esc(v)}">${esc(v)}</button>`).join("")}<button class="pk" data-newlabel="${P.key}" data-for="${it.id}" title="選べる値を足す">＋</button></div>`}</div>`;
+        ? tagGroups().filter(x => x[1].length).map(([g, ls]) => `<div class="cp-g">${esc(g ? g.name : "分類なし")}</div><div class="pick">${ls.map(v => `<button class="pk ${has(v) ? "on" : ""}" data-cpv="${esc(v)}">${esc(v)}</button>`).join("")}</div>`).join("") + `<div class="pick"><button class="pk" data-newlabel="tag" data-for="${it.id}" title="選べる値を追加">＋</button></div>`
+        : `<div class="pick">${labelList(P.key).map(v => `<button class="pk ${has(v) ? "on" : ""}" data-cpv="${esc(v)}">${esc(v)}</button>`).join("")}<button class="pk" data-newlabel="${P.key}" data-for="${it.id}" title="選べる値を追加">＋</button></div>`}</div>`;
   }
   function placeCellPop() {
     const pop = document.getElementById("cpop"); if (!pop || !S.cellPop) return;
@@ -540,7 +541,7 @@ export function startApp(root) {
     let content;
     if (S.loading) content = `<div class="card empty">読み込んでいます…</div>`;
     else if (S.err) content = `<div class="card empty">${esc(S.err)}<br><button class="ghost" id="reload" style="margin-top:10px">もう一度読む</button></div>`;
-    else if (!a.length) content = `<div class="card empty">${ITEMS.length ? "当てはまるものはありません。<br>絞り込みを外すか、別のビューを選んでください。" : "まだ 1 件もありません。右上の「＋ 足す」から入れてください。"}</div>`;
+    else if (!a.length) content = `<div class="card empty">${ITEMS.length ? "当てはまるものはありません。<br>絞り込みを外すか、別のビューを選んでください。" : "まだ 1 件もありません。右上の「＋ 追加」から入れてください。"}</div>`;
     else if (v.type === "gal") content = `<div class="gal">${a.map(galHTML).join("")}</div>`;
     else if (v.type === "board") content = boardHTML(a, v.group);
     else content = isPhone() ? `<div class="mlist">${a.map(mrowHTML).join("")}</div>` : tableHTML(a);
@@ -556,8 +557,8 @@ export function startApp(root) {
           <option value="ai:1">Claude に分析を頼む</option>
           <optgroup label="評価">${[5, 4, 3, 2, 1].map(g => `<option value="grade:${g}">${GRADE[g]}</option>`).join("")}<option value="grade:0">評価を外す</option></optgroup>
           <optgroup label="種類">${labelList("shu").map(v => `<option value="shu:${esc(v)}">${esc(v)}</option>`).join("")}</optgroup>
-          <optgroup label="ジャンルを足す">${labelList("genre").map(v => `<option value="genre:${esc(v)}">${esc(v)}</option>`).join("")}</optgroup>
-          <optgroup label="ラベルを足す">${labelList("tag").map(v => `<option value="tag:${esc(v)}">${esc(v)}</option>`).join("")}</optgroup></select>
+          <optgroup label="ジャンルを追加">${labelList("genre").map(v => `<option value="genre:${esc(v)}">${esc(v)}</option>`).join("")}</optgroup>
+          <optgroup label="ラベルを追加">${labelList("tag").map(v => `<option value="tag:${esc(v)}">${esc(v)}</option>`).join("")}</optgroup></select>
         <select id="bulkPack" aria-label="入れる素材パック"><option value="">素材パックに入れる…</option>${coll.DATA.pack.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}<option value="new">＋ 新しい素材パック</option></select>
         <select id="bulkShare" aria-label="入れる共有ページ"><option value="">共有ページに入れる…</option>${coll.DATA.share.map(p => `<option value="${p.id}">${esc(p.name)}</option>`).join("")}<option value="new">＋ 新しい共有ページ</option></select>
         <button id="bulkClear">選択をやめる</button></div>` : ""}
@@ -702,8 +703,8 @@ export function startApp(root) {
      </div></aside>`;
   }
 
-  /* ── 足す窓 ─────────────────────────────────────────── */
-  // 足す窓の置き場は「自動」が既定。自動は X・YouTube→今月の表、note→記事、PDF→教材PDF、ほかは開いている表（無ければ未整理）
+  /* ── 追加の窓 ─────────────────────────────────────────── */
+  // 追加の窓の置き場は「自動」が既定。自動は X・YouTube→今月の表、note→記事、PDF→教材PDF、ほかは開いている表（無ければ未整理）
   const browsingTable = () => (S.loc.startsWith("f:") && tableOf(S.table) ? S.table : "");
   // 同じリンクがもう保存されていたら知らせる（保存は止めない）
   function dupHTML(url) {
@@ -713,8 +714,8 @@ export function startApp(root) {
   function addHTML() {
     const A = S.add;
     const opts = `<option value="" ${A.table === "" ? "selected" : ""}>自動（X と YouTube は今月の表・note は記事・PDF は教材PDF・ほかは開いている表）</option>${CFG.tables.map(t => `<option value="${t.id}" ${t.id === A.table ? "selected" : ""}>${esc(pathOf(t.id).join(" / "))}</option>`).join("")}`;
-    return `<div class="mscrim" id="mScrim"></div><div class="modal addm" role="dialog" aria-label="スワイプを足す">
-      <div class="m-top"><b style="font-size:15px">スワイプを足す</b><button class="icon" id="mClose" aria-label="閉じる">${IC.x}</button></div>
+    return `<div class="mscrim" id="mScrim"></div><div class="modal addm" role="dialog" aria-label="スワイプを追加">
+      <div class="m-top"><b style="font-size:15px">スワイプを追加</b><button class="icon" id="mClose" aria-label="閉じる">${IC.x}</button></div>
       <div class="addf">
         <label>リンク<input id="adUrl" value="${esc(A.url)}" placeholder="https://x.com/… や note の URL（無くてもよい）"></label>
         ${dupHTML(A.url)}
@@ -775,6 +776,7 @@ export function startApp(root) {
 
   /* ── 消す（数秒は元に戻せる。確定したら置き場のファイルも消す） ── */
   let pendingDel = null;
+  let undoOnce = null; // 2026-11-08 表の削除など、消したもの以外を「元に戻す」で戻すとき
   // 2026-11-01 ログアウトの前に待てるよう、確定の結果（true／false）を返す
   function commitRemove() {
     const P = pendingDel; if (!P) return Promise.resolve(true); pendingDel = null; clearTimeout(P.timer);
@@ -787,6 +789,7 @@ export function startApp(root) {
   function removeWithUndo(it) {
     if (!it) return;
     commitRemove(); // 前に消したものは、ここで確定する
+    undoOnce = null;
     clearTimeout(timers.get(it.id)); timers.delete(it.id); unsent.delete(it.id); // 2026-11-01 預かっていた保存も捨てる（消したものを送り直さない）
     const idx = ITEMS.findIndex(x => x.id === it.id);
     ITEMS = ITEMS.filter(x => x.id !== it.id); S.open = null; S.lb = null; S.sel.delete(it.id); render();
@@ -799,7 +802,7 @@ export function startApp(root) {
   }
   addEventListener("pagehide", commitRemove);
 
-  /* ── 足す ───────────────────────────────────────────── */
+  /* ── 追加 ───────────────────────────────────────────── */
   function openAdd() { S.modal = "add"; S.add = { url: "", title: "", body: "", why: "", table: "", file: null, fileObj: null, busy: false }; render(); setTimeout(() => { const n = $("#adUrl"); n && n.focus(); }, 0); }
   function setAddFile(f) {
     if (!f) return;
@@ -844,7 +847,7 @@ export function startApp(root) {
     if (wsOpen && !q("#wsm")) closeWs(false); // 場所のメニューは外を押すと閉じる
     if (q("#addBtn")) { openAdd(); return; }
     if (b = q("[data-scr]")) { if (S.scr !== b.dataset.scr) { S.scr = b.dataset.scr; S.open = null; S.lb = null; S.cellPop = null; S.sel.clear(); render(); main0(); } return; }
-    if (q("#toastUndo")) { undoRemove(); $("#toast").hidden = true; return; }
+    if (q("#toastUndo")) { const u = undoOnce; undoOnce = null; if (u) u(); else undoRemove(); $("#toast").hidden = true; return; }
     if (!screen.contains(t)) return;
     if (b = q("[data-seek]")) { const sec = +b.dataset.seek; ytCmd("seekTo", [sec, true]); ytCmd("playVideo"); ytT = sec; markNow(false); return; }
     if (S.scr !== "app") { if (q("#navBtn")) { S.navOn = !S.navOn; render(); return; } coll.onClick(S.scr, t); return; }
@@ -870,21 +873,22 @@ export function startApp(root) {
     if (q("#reload")) { boot(); return; }
     if (q("#addView")) {
       const f = { ...S.f }; const parts = [f.shu, f.ref, f.star && (GRADE[f.star] + (f.star < 5 ? " 以上" : "")), f.genre, f.stagex !== undefined && f.stagex !== "" && STAGES[f.stagex], f.tag].filter(Boolean);
-      const name = prompt("ビューの名前", parts.join("・") || "新しいビュー"); if (name === null) return;
-      const id = "v" + Date.now().toString(36);
-      CFG.views.push({ id, name: name.trim() || "新しいビュー", type: curView().type, group: curView().group, f });
-      S.view = id; S.f = {}; saveCfg(); render(); toast(parts.length ? "いまの絞り込みをビューとして残しました" : "ビューを足しました"); return;
+      ask({ title: "ビューの名前", value: parts.join("・") || "新しいビュー", ok: "追加" }).then(r => { if (!r) return;
+        const id = "v" + Date.now().toString(36);
+        CFG.views.push({ id, name: r.value.trim() || "新しいビュー", type: curView().type, group: curView().group, f });
+        S.view = id; S.f = {}; saveCfg(); render(); toast(parts.length ? "いまの絞り込みをビューとして残しました" : "ビューを追加しました"); }); return;
     }
     if (b = q("#addTable")) {
-      const fid = b.dataset.folder; const name = prompt("表の名前"); if (!name || !name.trim()) return;
-      const id = "t-" + Date.now().toString(36); CFG.tables.push({ id, name: name.trim(), folder: fid });
-      S.loc = "f:" + fid; S.table = id; saveCfg(); render(); return;
+      const fid = b.dataset.folder;
+      ask({ title: "表の名前", value: "", ok: "追加" }).then(r => { const name = r?.value.trim(); if (!name) return;
+        const id = "t-" + Date.now().toString(36); CFG.tables.push({ id, name, folder: fid });
+        S.loc = "f:" + fid; S.table = id; saveCfg(); render(); }); return;
     }
     if (q("#addFolder")) {
-      const name = prompt("フォルダの名前"); if (!name || !name.trim()) return;
-      const parent = S.loc.startsWith("f:") && confirm(`「${folderOf(S.loc.slice(2))?.name}」の中に作りますか？（キャンセルで一番上に作る）`) ? S.loc.slice(2) : null;
-      const id = "f-" + Date.now().toString(36); CFG.folders.push({ id, name: name.trim(), parent });
-      S.loc = "f:" + id; saveCfg(); render(); return;
+      const inF = S.loc.startsWith("f:") ? S.loc.slice(2) : null;
+      ask({ title: "フォルダの名前", value: "", ok: "追加", check: inF ? { label: `「${folderOf(inF)?.name}」の中に作る`, checked: true } : null }).then(r => { const name = r?.value.trim(); if (!name) return;
+        const id = "f-" + Date.now().toString(36); CFG.folders.push({ id, name, parent: inF && r.checked ? inF : null });
+        S.loc = "f:" + id; saveCfg(); render(); }); return;
     }
     if (q("#colBtn")) { S.colPop = !S.colPop; render(); return; }
     if (b = q("[data-colmv]")) { const [k, d] = b.dataset.colmv.split(":"); const i = CFG.cols.indexOf(k), j = i + +d; if (j >= 0 && j < CFG.cols.length) [CFG.cols[i], CFG.cols[j]] = [CFG.cols[j], CFG.cols[i]]; saveCfg(); render(); return; }
@@ -896,18 +900,19 @@ export function startApp(root) {
     if (b = q("[data-open]")) { S.open = b.dataset.open; S.delArm = false; S.bodyEdit = false; render(); return; }
     if (q("#navBtn")) { S.navOn = !S.navOn; render(); return; }
     if (t.id === "scrim" || q("#dtClose")) { S.open = null; S.lb = null; render(); return; }
-    if (q("#lgAddLabel")) { const n = $("#lgNewLabel"); const v = n && n.value.trim() ? pickLabel("tag", n.value) : null; if (!v) return; CFG.labels.tag = D.uniqLabels([...(CFG.labels.tag || []), v]); saveCfg(); render(); return; }
+    if (q("#lgAddLabel")) { const n = $("#lgNewLabel"); if (!n || !n.value.trim()) return; pickLabel("tag", n.value).then(v => { if (!v) return; CFG.labels.tag = D.uniqLabels([...(CFG.labels.tag || []), v]); saveCfg(); render(); }); return; }
     if (q("#lgAddGroup")) { const n = $("#lgNewGroup"); const v = (n?.value || "").trim(); if (!v) return; if (LG().some(g => g.name === v)) { toast(`分類「${v}」はもうあります`); return; } LG().push({ id: "g" + Date.now().toString(36), name: v }); saveCfg(); render(); return; }
     if (b = q("[data-lgmv]")) { const [id, d] = b.dataset.lgmv.split(":"); const a = LG(), i = a.findIndex(g => g.id === id), j = i + +d; if (i < 0 || j < 0 || j >= a.length) return; [a[i], a[j]] = [a[j], a[i]]; saveCfg(); render(); return; }
     if (b = q("[data-lgdel]")) { const id = b.dataset.lgdel; CFG.lgroups = LG().filter(g => g.id !== id); const m = lgOf(); Object.keys(m).forEach(k => { if (m[k] === id) delete m[k]; }); saveCfg(); render(); return; }
     if (b = q("[data-ldel]")) { const l = b.dataset.ldel; if (S.lgArm !== l) { S.lgArm = l; render(); return; } S.lgArm = null; deleteTag(l); render(); return; }
     if (S.lgArm && !q("[data-ldel]")) S.lgArm = null;
     if (b = q("[data-newlabel]")) {
-      const key = b.dataset.newlabel; const raw = prompt(`${LABEL_KEYS[key]}に足す値`); if (!raw || !raw.trim()) return;
-      const v = pickLabel(key, raw); if (!v) return;
-      CFG.labels[key] = key === "tag" ? D.uniqLabels([...(CFG.labels[key] || []), v]) : uniq([...(CFG.labels[key] || []), v]); saveCfg();
-      const it = b.dataset.for ? ITEMS.find(x => x.id === b.dataset.for) : cur(); if (it) { if (key === "shu") it.shu = v; else { const field = key === "tag" ? "tags" : key; it[field] = uniq([...it[field], v]); } changed(it, 0); }
-      render(); return;
+      const key = b.dataset.newlabel; const forId = b.dataset.for; const openId = S.open;
+      ask({ title: `${LABEL_KEYS[key]}に追加する値`, value: "", ok: "追加" }).then(async r => { if (!r || !r.value.trim()) return;
+        const v = await pickLabel(key, r.value); if (!v) return;
+        CFG.labels[key] = key === "tag" ? D.uniqLabels([...(CFG.labels[key] || []), v]) : uniq([...(CFG.labels[key] || []), v]); saveCfg();
+        const it = ITEMS.find(x => x.id === (forId || openId)); if (it) { if (key === "shu") it.shu = v; else { const field = key === "tag" ? "tags" : key; it[field] = uniq([...it[field], v]); } changed(it, 0); }
+        render(); }); return;
     }
     if (b = q("[data-pk]")) { const it = cur(); it[b.dataset.pk] = toggle(it[b.dataset.pk], b.dataset.v); changed(it, 300); render(); return; }
     if (b = q("[data-pkone]")) { const it = cur(); it.shu = it.shu === b.dataset.pkone ? "" : b.dataset.pkone; changed(it, 300); render(); return; }
@@ -934,11 +939,14 @@ export function startApp(root) {
     const b = e.target.closest("[data-table]"); if (!b) return;
     const tb = tableOf(b.dataset.table); if (!tb) return;
     const n = ITEMS.filter(it => it.table === tb.id).length;
-    const name = prompt(n ? "表の名前を変える" : "表の名前を変える（空にして決定すると、この空の表を消す）", tb.name);
-    if (name === null) return;
-    if (!name.trim()) { if (n) { toast("中身がある表は消せません"); return; } CFG.tables = CFG.tables.filter(x => x.id !== tb.id); S.table = null; }
-    else tb.name = name.trim();
-    saveCfg(); render();
+    // 2026-11-08 入力の窓をやめ、アプリの窓で名前を変更。中身の無い表は同じ窓から削除（元に戻す付き）
+    ask({ title: "表の名前を変更", value: tb.name, ok: "保存", danger: n ? null : { label: "この表を削除" } }).then(r => { if (!r) return;
+      if (r.danger) {
+        const idx = CFG.tables.indexOf(tb); CFG.tables = CFG.tables.filter(x => x.id !== tb.id); S.table = null; saveCfg(); render();
+        undoOnce = () => { CFG.tables.splice(Math.min(idx, CFG.tables.length), 0, tb); S.table = tb.id; saveCfg(); render(); toast("元に戻しました"); };
+        toastUndo(`表「${tb.name}」を削除しました`); return;
+      }
+      if (r.value.trim()) { tb.name = r.value.trim(); saveCfg(); render(); } });
   });
   screen.addEventListener("change", async e => {
     const t = e.target;
@@ -1009,7 +1017,7 @@ export function startApp(root) {
     if (e.target.id === "q") { S.q = e.target.value; keepFocus("q", render); }
     if (e.target.id === "cmq" && S.scr !== "app") { coll.onInput(S.scr, e.target); keepFocus("cmq", render); }
   });
-  // 見出しのドラッグで列の並びを変える／足す窓へファイルを落とす
+  // 見出しのドラッグで列の並びを変える／追加の窓へファイルを落とす
   screen.addEventListener("dragstart", e => { const th = e.target.closest?.("th[data-col]"); if (th) { S.dragCol = th.dataset.col; e.dataTransfer.effectAllowed = "move"; try { e.dataTransfer.setData("text/plain", S.dragCol); } catch { /* 古いブラウザ */ } } });
   screen.addEventListener("dragover", e => {
     const th = e.target.closest?.("th[data-col]"); if (th && S.dragCol) { e.preventDefault(); screen.querySelectorAll("th.over").forEach(x => x.classList.remove("over")); th.classList.add("over"); return; }

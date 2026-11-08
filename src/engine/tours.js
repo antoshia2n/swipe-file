@@ -8,9 +8,9 @@ export function makeTours(ctx) {
     {
       id: "first",
       title: "はじめの 1 件",
-      desc: "スワイプを足して、探して、見え方を変える",
+      desc: "スワイプを追加して、探して、見え方を変える",
       steps: [
-        { before: () => ctx.go("app"), el: "#addBtn", title: "スワイプを足す", body: "右上の「＋ 足す」から、リンク・本文・画像か PDF のどれか 1 つで保存できます。画像は足す窓に貼り付けても入ります。" },
+        { before: () => ctx.go("app"), el: "#addBtn", title: "スワイプを追加", body: "右上の「＋ 追加」から、リンク・本文・画像か PDF のどれか 1 つで保存できます。画像は追加の窓に貼り付けても入ります。" },
         { before: () => ctx.go("app"), el: "#q", title: "探す", body: "本文・分析・投稿者の言葉で探せます。" },
         { before: () => ctx.go("app"), el: ".vtabs", title: "見え方を変える", body: "表・ギャラリー・分析の段などを切り替えます。" },
         { before: () => ctx.go("app"), el: "#saveState", title: "保存", body: "書くと自動で保存され、ここに「保存中…」と出ます。" },
