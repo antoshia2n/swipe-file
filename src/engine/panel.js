@@ -1,7 +1,7 @@
 /**
  * スワイプくんの細い画面（/panel）。拡張機能「スワイプくんパネル」のサイドパネルの中で開く。
  * 見ているページを読む・撮るのは拡張機能（swipe-kun-panel/panel.js）。ここは頼んで、受け取って、保存する。
- * 形はデモ 8 のサイドパネルそのまま。保存までの操作は「保存する」1 回（撮り方・ラベルは前回のまま）。
+ * 形はデモ 8 のサイドパネルそのまま。保存までの操作は「保存する」1 回（撮り方は前回のまま・ラベルは中身を見て自動で選ぶ 2026-11-09）。
  */
 import * as D from "./data.js";
 import { bulletEdit, cleanBullets } from "../lib/bullets.js";
@@ -25,7 +25,7 @@ export function startPanel(root) {
   const S = {
     ext: false, page: null, err: "", loading: true,
     mode: store.get("swipe.pn.mode", "post"), thread: true,
-    grade: 0, refs: new Set(store.get("swipe.pn.refs", [])), made: [], memo: "", table: "",
+    grade: 0, refs: new Set(), autoRefs: [], refsKey: "", refsTouched: false, made: [], memo: "", table: "",
     busy: false, file: null, fileObj: null, items: [], cfg: null, saved: null,
     yt: null, // YouTube を見ているとき { id, state: wait|ok|none|old, data, og }
   };
@@ -79,6 +79,7 @@ export function startPanel(root) {
     try { S.page = await ask("peek", {}, 8000); S.err = ""; }
     catch (e) { S.page = null; S.err = e.message; }
     S.thread = true;
+    autoPick();
     const id = D.ytId(S.page?.url);
     if (!id) S.yt = null; else if (S.yt?.id !== id) loadYt(id, S.page.url);
     render();
@@ -95,6 +96,7 @@ export function startPanel(root) {
     S.yt.og = og;
     if (r.e) S.yt.state = /知らない頼み/.test(r.e) ? "old" : "none";
     else { S.yt.data = r.d; S.yt.state = r.d?.lines?.length ? "ok" : "none"; }
+    autoPick(true);
     render();
   }
 
@@ -104,6 +106,18 @@ export function startPanel(root) {
   // 2026-10-30：参考ポイントはラベルに統一。前の参考ポイントの値もラベルの候補に入れる
   const refList = () => D.uniqLabels([...(S.cfg ? S.cfg.labels?.tag || [] : REF_DEFAULT), ...S.items.flatMap(i => i.tags), ...S.made]);
   // 覚えている選び方のうち、いま無いラベル（画面で消したもの）は付けない
+  // 2026-11-09：ページが変わったら、中身を見てラベルを選び直す（前の保存のラベルは引き継がない）。押して直したあとは、同じページでは選び直さない
+  function autoPick(again = false) {
+    const P = S.page; if (!P) return;
+    const X = P.x, key = X ? `x:${X.main.id}` : P.url || "";
+    if (key === S.refsKey && (!again || S.refsTouched)) return;
+    if (key !== S.refsKey) S.refsTouched = false;
+    S.refsKey = key;
+    const text = X ? (S.thread ? X.thread : [X.main]).map(p => p.text).join("\n") : [P.ogTitle || P.title, P.desc, S.yt?.data?.title, S.yt?.og?.title].filter(Boolean).join("\n");
+    let host = ""; try { host = new URL(P.url).hostname.replace(/^www\./, ""); } catch { /* 住所が無いページ */ }
+    S.autoRefs = D.suggestLabels({ text, handle: X ? X.main.handle : "", host }, S.items, refList());
+    S.refs = new Set(S.autoRefs);
+  }
   const pickedRefs = () => { const ok = new Set(refList()); return [...S.refs].filter(x => ok.has(x)); };
   function autoTable({ isX, url, isPdf }) {
     if (isX) return D.monthTableId();
@@ -121,7 +135,7 @@ export function startPanel(root) {
     const opts = `<option value="">自動：${esc(tableName(auto))}</option>${tables().map(t => `<option value="${t.id}" ${S.table === t.id ? "selected" : ""}>${esc(tableName(t.id))}</option>`).join("")}`;
     return `<div class="dest"><div>保存先</div><select class="lsel mini" id="pnTable" aria-label="保存先">${opts}</select></div>
       <div class="frow"><span class="dt-h" style="margin:0">評価</span><select class="grade g${S.grade}" id="pnGrade" aria-label="評価">${["", 5, 4, 3, 2, 1].map(v => `<option value="${v}" ${String(v) === String(S.grade || "") ? "selected" : ""}>${v ? GRADE[v] : "―"}</option>`).join("")}</select><span class="lsub">空でもよい</span></div>
-      <div><div class="dt-h">ラベル<span>AI に借りてほしいところ</span></div><div class="pick">${refList().map(x => `<button class="pk ${S.refs.has(x) ? "on" : ""}" style="--c:var(--l-kata)" data-ref="${esc(x)}">${esc(x)}</button>`).join("")}<span class="pk-new"><input id="pnNewLabel" placeholder="新しいラベル" aria-label="新しいラベル"><button class="pk" id="pnAddLabel" title="ラベルを作って付ける">＋</button></span></div></div>
+      <div><div class="dt-h">ラベル<span>AI に借りてほしいところ</span></div>${S.autoRefs.length ? `<div class="pn-auto">自動で選んだ：${S.autoRefs.map(esc).join("・")}（外すときは押す）</div>` : ""}<div class="pick">${refList().map(x => `<button class="pk ${S.refs.has(x) ? "on" : ""}" style="--c:var(--l-kata)" data-ref="${esc(x)}">${esc(x)}</button>`).join("")}<span class="pk-new"><input id="pnNewLabel" placeholder="新しいラベル" aria-label="新しいラベル"><button class="pk" id="pnAddLabel" title="ラベルを作って付ける">＋</button></span></div></div>
       <div><div class="dt-h">メモ<span>空でもよい・分析の「言語化」に入る</span></div><textarea class="pn-in pn-memo" id="pnMemo" placeholder="- なぜ目に止まったか&#10;  - 気づいたこと">${esc(S.memo)}</textarea><div class="pn-hint">Enter で次の行も箇条書き・Tab で一段下げる</div></div>`;
   }
   function pageBox() {
@@ -232,7 +246,7 @@ export function startPanel(root) {
   const dataUrlToFile = async (u, name) => new File([await (await fetch(u)).blob()], name, { type: "image/png" });
   function afterSave(it) {
     S.items.unshift(it); S.memo = ""; S.grade = 0; S.table = ""; S.busy = false;
-    store.set("swipe.pn.refs", [...S.refs]); store.set("swipe.pn.mode", S.mode);
+    store.set("swipe.pn.mode", S.mode); S.refsKey = ""; autoPick();
     render(); toast(`保存しました（${tableName(it.table)}）`);
   }
   async function savePage() {
@@ -286,7 +300,7 @@ export function startPanel(root) {
     if (b = q("[data-cap]")) { S.mode = b.dataset.cap; store.set("swipe.pn.mode", S.mode); render(); return; }
     if (b = q("[data-thr]")) { S.thread = b.dataset.thr === "1"; render(); return; }
     if (q("#pnAddLabel")) { addLabel(); return; }
-    if (b = q("[data-ref]")) { const v = b.dataset.ref; S.refs.has(v) ? S.refs.delete(v) : S.refs.add(v); render(); return; }
+    if (b = q("[data-ref]")) { const v = b.dataset.ref; S.refs.has(v) ? S.refs.delete(v) : S.refs.add(v); S.refsTouched = true; render(); return; }
     if (q("#pnSave")) { savePage(); return; }
     if (q("#pnFill")) { fillTranscript(); return; }
     if (q("#pnFileSave")) { saveFile(); return; }
@@ -304,7 +318,7 @@ export function startPanel(root) {
     const n = document.getElementById("pnNewLabel"); const raw = (n?.value || "").normalize("NFKC").replace(/\s+/g, " ").trim(); if (!raw) return;
     const same = refList().find(x => D.labelKey(x) === D.labelKey(raw)); const v = same || raw;
     if (!same) S.made.push(v);
-    S.refs.add(v); store.set("swipe.pn.refs", [...S.refs]); render();
+    S.refs.add(v); S.refsTouched = true; render();
     toast(same ? `「${same}」がもうあるので、それを付けました` : `「${v}」を作って付けました`);
     setTimeout(() => document.getElementById("pnNewLabel")?.focus(), 0);
   }

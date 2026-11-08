@@ -37,6 +37,23 @@ async function run(q, fallback) {
  * 全角と半角・前後の空白・大文字と小文字の違いだけのラベルは同じものとして扱う（「ＣＴＡ」「cta 」→「CTA」）。
  * 先に出てきた書き方を残す。 */
 export const labelKey = s => String(s ?? "").normalize("NFKC").replace(/\s+/g, " ").trim().toLowerCase();
+// 2026-11-09：サイドパネルのラベルの自動選び（Naoki OK 08:06）。今あるラベルの中から、
+// ①本文・題名に名前が出てくるもの ②同じ人（X は同じアカウント）の前の保存によく付けたもの ③同じサイトの保存で 2 回以上付けたもの、を点数の高い順に最大 3 つ。
+// 新しいラベルは作らない。人が付けた評価は触らない
+const whoKey = s => labelKey(String(s ?? "").replace(/^@/, ""));
+export function suggestLabels({ text = "", handle = "", host = "" } = {}, items = [], labels = [], max = 3) {
+  const have = new Map(); for (const l of labels) { const k = labelKey(l); if (k && !have.has(k)) have.set(k, l); }
+  const score = new Map(); const add = (k, n) => { if (have.has(k)) score.set(k, (score.get(k) || 0) + n); };
+  const t = labelKey(text);
+  for (const k of have.keys()) if (k.length >= 2 && t.includes(k)) add(k, 2);
+  const who = whoKey(handle), site = whoKey(host);
+  for (const it of items) {
+    const h = whoKey(it.handle);
+    const w = who && h === who ? 1 : !who && site && h === site ? 0.5 : 0;
+    if (w) for (const g of it.tags || []) add(labelKey(g), w);
+  }
+  return [...score.entries()].filter(([, n]) => n >= 1).sort((a, b) => b[1] - a[1]).slice(0, max).map(([k]) => have.get(k));
+}
 export function uniqLabels(list) {
   const seen = new Map();
   for (const v of list) { const t = String(v ?? "").normalize("NFKC").replace(/\s+/g, " ").trim(); const k = t.toLowerCase(); if (t && !seen.has(k)) seen.set(k, t); }
