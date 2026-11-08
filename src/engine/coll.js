@@ -5,6 +5,7 @@
  *   共有ページ：選んだスワイプにシアニンのコメントを付け、生徒にリンクで見せる（/s/{token}・ログインなし）
  * フォルダと表の並びは sw_settings の data.coll に、中身は sw_packs・sw_shares に置く。
  */
+import { qh } from "./guide.js";
 import * as D from "./data.js";
 
 export const MAKES = ["X記事", "ポスト", "スレッド", "note", "セミナー資料", "販売ページ", "メルマガ", "動画の台本", "その他"];
@@ -153,7 +154,7 @@ export function createColl(x) {
       ${rows.map(o => `<tr class="clickrow" data-copen="${o.id}">${ROW[k](o).map((v, i) => `<td data-l="${esc(HEAD[k][i] || "")}">${v}</td>`).join("")}${all ? `<td class="num" data-l="場所">${esc(where(k, o.table))}</td>` : ""}</tr>`).join("")}</tbody></table></div></div>`
       : `<div class="card empty">${st.loc.startsWith("f:") && !st.table ? "このフォルダにはまだ表がありません。「＋ 表」から作ってください。" : `まだありません。「＋ 新しい${LABEL[k]}」か、スワイプの表で選んで「${LABEL[k]}に入れる」で作れます。`}</div>`);
     return `<div class="wrap gut">${x.headHTML([LABEL[k]], title, lead)}${tabs}
-      <div class="vrow"><button class="ink" id="cNew" ${missing[k] ? "disabled" : ""}>＋ 新しい${LABEL[k]}</button><span class="lsub" style="margin-left:auto">${rows.length} 件</span></div>${body}</div>`;
+      <div class="vrow"><button class="ink" id="cNew" ${missing[k] ? "disabled" : ""}>＋ 新しい${LABEL[k]}</button>${qh(k)}<span class="lsub" style="margin-left:auto">${rows.length} 件</span></div>${body}</div>`;
   }
 
   /* ── 編集の画面 ── */
