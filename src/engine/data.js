@@ -41,11 +41,25 @@ export const labelKey = s => String(s ?? "").normalize("NFKC").replace(/\s+/g, "
 // ①本文・題名に名前が出てくるもの ②同じ人（X は同じアカウント）の前の保存によく付けたもの ③同じサイトの保存で 2 回以上付けたもの、を点数の高い順に最大 3 つ。
 // 新しいラベルは作らない。人が付けた評価は触らない
 const whoKey = s => labelKey(String(s ?? "").replace(/^@/, ""));
-export function suggestLabels({ text = "", handle = "", host = "" } = {}, items = [], labels = [], max = 3) {
+// 2026-11-09（2）：ラベルの名前は本文にそのまま出てこないことが多いので、中身の手がかりでも当てる（そのラベルを持っているときだけ）
+const CUES = [
+  ["スレッド", (t, f) => f.thread >= 2],
+  ["構文", t => /第\s*\d+\s*位|\d+\s*選|(^|\n)\s*vs\s*(\n|$)|の特徴|【[^】]{2,}】|((^|\n)\s*[・●■▪︎◆✅]\s*\S.*){3,}|←|→/.test(t)],
+  ["数字", t => /\d[\d,.]*\s*(万|円|%|％|人|件|倍|日|ヶ月|か月|カ月|年|回|本|位)/.test(t)],
+  ["募集告知", t => /募集|締め?切|先着|残り\s*\d|受付中|申し?込/.test(t)],
+  ["顧客の声", t => /受講生|生徒さん|お客様|ご?感想|喜びの声|参加者/.test(t)],
+  ["実績の見せ方", t => /達成|突破|実績|売上|月収|万円|フォロワー\s*\d/.test(t)],
+  ["自己開示", t => /(僕|私|自分|俺)(は|も|が|の).{0,40}(でした|だった|失敗|悩ん|苦し|辛|つら|挫折)/.test(t)],
+  ["セールスの流れ", t => /(LINE|ライン|公式).{0,8}(登録|追加)|プロフ(ィール)?の?リンク|特典|無料(で)?プレゼント/.test(t)],
+  ["図解", t => /図解/.test(t)],
+];
+export function suggestLabels({ text = "", handle = "", host = "", thread = 0 } = {}, items = [], labels = [], max = 3) {
   const have = new Map(); for (const l of labels) { const k = labelKey(l); if (k && !have.has(k)) have.set(k, l); }
   const score = new Map(); const add = (k, n) => { if (have.has(k)) score.set(k, (score.get(k) || 0) + n); };
   const t = labelKey(text);
   for (const k of have.keys()) if (k.length >= 2 && t.includes(k)) add(k, 2);
+  const raw = String(text || "").normalize("NFKC");
+  for (const [name, hit] of CUES) { const k = labelKey(name); if (have.has(k) && !score.has(k) && hit(raw, { thread })) add(k, 2); }
   const who = whoKey(handle), site = whoKey(host);
   for (const it of items) {
     const h = whoKey(it.handle);
