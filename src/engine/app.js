@@ -10,6 +10,7 @@ import { createColl, DEFAULT_COLL } from "./coll.js";
 import { loadPdf } from "./pdfpages.js";
 import { mountAppShell } from "shia2n-core/lite.js";
 import { makeTours } from "./tours.js";
+import { qh, onGuide } from "./guide.js";
 
 /* ── 決まった値 ───────────────────────────────────────── */
 const GRADE = { 5: "S", 4: "A", 3: "B", 2: "C", 1: "D" };
@@ -103,7 +104,7 @@ export function startApp(root) {
       <div class="brand">${BRAND_ICON}<span class="brand-t">スワイプくん<span>.</span></span></div>
       <div class="wsm" id="wsm" hidden></div>
       <nav class="hm" aria-label="機能"><button data-scr="app">スワイプ</button><button data-scr="pack">素材パック</button><button data-scr="share">共有ページ</button></nav>
-      <div class="top-r"><span class="lsub" id="saveState"></span><button class="ink" id="addBtn" aria-label="足す">＋<span class="add-t"> 足す</span></button><span class="shell-slot"></span></div>
+      <div class="top-r"><span class="lsub" id="saveState"></span><button class="ink" id="addBtn" aria-label="足す">＋<span class="add-t"> 足す</span></button><span class="add-q"></span><span class="shell-slot"></span></div>
     </div>
     <div class="screen" id="screen"></div>
   </div><div class="toast" id="toast" hidden></div>`;
@@ -119,7 +120,7 @@ export function startApp(root) {
       render();
     };
     const shell = mountAppShell({
-      appId: "swipe-file", appName: "スワイプくん",
+      appId: "swipe-file", appName: "スワイプくん", guide: true,
       manual: {
         intro: "X のポスト・note・販売ページや教材など、参考になる見本を保存して、なぜ良いかを言語化しておくアプリ。分析は 言語化 → 仮説 → 用途抽出 の 3 段で書きます。",
         sections: [
@@ -161,6 +162,8 @@ export function startApp(root) {
     });
     shell.attach(root.querySelector(".shell-slot"));
   } catch (_) { /* 外枠が出せなくてもアプリは動かす */ }
+  /* ガイドの「？」（2026-11-08）。切り替えたら描き直す */
+  try { onGuide(() => render()); } catch (_) { /* 無くても動く */ }
   /* ── YouTube の埋め込み（5便目） ─────────────────────────
      画面は描き直すたびに中身を作り直す。動画の枠まで作り直すと再生が止まるので、
      描き直しの間だけ外の置き場へ移して戻す（moveBefore なら再生したまま移せる） */
@@ -417,7 +420,7 @@ export function startApp(root) {
       ${nv("ai", "Claude に頼んだ分析", cnt(it => it.ai), { c: "var(--k-doc)" })}
       ${un ? nv("unsorted", "未整理（置き場なし）", un, { c: "var(--k-lp)" }) : ""}
       ${nv("labels", "ラベルを整える", rawTags().length, { c: "var(--l-kata)" })}
-      <div class="nh"><span>フォルダ</span><button id="addFolder" aria-label="フォルダを足す" title="フォルダを足す">＋</button></div>
+      <div class="nh"><span>フォルダ${qh("folder", "margin:0 auto 0 6px;width:16px;height:16px")}</span><button id="addFolder" aria-label="フォルダを足す" title="フォルダを足す">＋</button></div>
       ${tree(null, 0)}
     </div></nav>`;
   }
@@ -489,7 +492,7 @@ export function startApp(root) {
   function tableHTML(a) {
     const base = CFG.cols.filter(k => COLS[k]);
     const cols = S.loc.startsWith("f:") ? base : (base.includes("place") ? base : [...base.slice(0, 4), "place", ...base.slice(4)]);
-    return `<div class="card"><div class="tw"><table><thead><tr><th style="width:36px"></th><th>見出し</th>${cols.map(k => `<th class="dragc" draggable="true" data-col="${k}">${esc(COLS[k])}</th>`).join("")}</tr></thead><tbody>
+    return `<div class="card"><div class="tw"><table><thead><tr><th style="width:36px"></th><th>見出し${qh("row")}</th>${cols.map(k => `<th class="dragc" draggable="true" data-col="${k}">${esc(COLS[k])}</th>`).join("")}</tr></thead><tbody>
     ${a.map(it => `<tr class="${S.sel.has(it.id) ? "sel" : ""}">
       <td><input type="checkbox" class="ck" data-ck="${it.id}" ${S.sel.has(it.id) ? "checked" : ""} aria-label="選ぶ"></td>
       <td><button class="namebtn ${it.shot ? "withi" : ""}" data-open="${it.id}">${it.shot ? `<img class="ti" src="${esc(it.shot)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}<span class="nmw"><span class="nm">${esc(it.title)}</span><span class="snip">${esc(it.a.why || it.excerpt || it.body.slice(0, 120))}</span></span></button></td>
@@ -544,9 +547,9 @@ export function startApp(root) {
     const colBtn = v.type === "table" ? `<span class="colbtn"><button class="ghost" id="colBtn" aria-expanded="${S.colPop}">列</button>${S.colPop ? colPopHTML() : ""}</span>` : "";
     const moveOpts = CFG.tables.map(t => `<option value="${t.id}">${esc(pathOf(t.id).join(" / "))}</option>`).join("");
     return `<div class="wrap gut">${headHTML(crumb, title, lead)}${tabs}
-      <div class="vrow"><div class="vtabs" role="tablist" aria-label="ビュー">${CFG.views.map(vtab).join("")}<button class="vtab" id="addView">＋ ビュー</button></div>
+      <div class="vrow"><div class="vtabs" role="tablist" aria-label="ビュー">${CFG.views.map(vtab).join("")}<button class="vtab" id="addView">＋ ビュー</button>${qh("view", "align-self:center")}</div>
         <label class="lq">${IC.search}<input id="q" placeholder="本文・分析・投稿者で探す" value="${esc(S.q)}" aria-label="探す"></label></div>
-      <div class="frow"><span class="fwrap"><button class="ghost fbtn ${nF ? "on" : ""}" id="fBtn" aria-expanded="${S.fPop}">${IC.filter}絞り込み${nF ? ` <b>${nF}</b>` : ""}</button>${S.fPop ? `<div class="fpop" role="dialog" aria-label="絞り込み">${labelSels(S.f, "f")}</div>` : ""}</span>
+      <div class="frow"><span class="fwrap"><button class="ghost fbtn ${nF ? "on" : ""}" id="fBtn" aria-expanded="${S.fPop}">${IC.filter}絞り込み${nF ? ` <b>${nF}</b>` : ""}</button>${qh("filter")}${S.fPop ? `<div class="fpop" role="dialog" aria-label="絞り込み">${labelSels(S.f, "f")}</div>` : ""}</span>
         ${fChips}${anyF ? `<button class="fclear" id="fClear">外す</button>` : ""}<span class="lsub" style="margin-left:auto">${a.length} 件${f.star || f.todo ? `・ビュー「${esc(v.name)}」の条件つき` : ""}</span>${colBtn}</div>
       ${S.sel.size ? `<div class="bulk"><span>${S.sel.size} 件を選択中</span><select id="bulkMove" aria-label="移す先"><option value="">表へ移す…</option>${moveOpts}</select>
         <select id="bulkSet" aria-label="まとめて付ける"><option value="">まとめて付ける…</option>
@@ -689,7 +692,7 @@ export function startApp(root) {
         ${!it.body ? `<div><div class="dt-h">${yid ? "文字起こし" : "本文"}<span>${yid ? "パネルで保存すると入る・「元の情報を直す」から貼れる" : "「元の情報を直す」から入れられる"}</span></div><div class="dt-v">${it.excerpt ? esc(it.excerpt) : '<span class="num">本文はまだありません</span>'}</div></div>` : ""}
       </section>
       <section class="dt-an">
-        <div><div class="dt-h">分析<span>${n} / 3・${STAGES[n]}</span></div><div class="steps">
+        <div><div class="dt-h">分析${qh("analysis", "margin:0 auto 0 4px")}<span>${n} / 3・${STAGES[n]}</span></div><div class="steps">
           ${step("why", 1, "言語化", "なぜ良いか", "例：一文目で読み手の思い当たりを作っている")}
           ${step("hypo", 2, "仮説", "ほかでも効きそうな型", "例：対比に数字が入ると引用されやすい")}
           ${step("idea", 3, "用途抽出", "どこで・どう使うか", "例：2期の募集記事の冒頭で、0期の失敗談を先に置く形で使う")}
@@ -733,6 +736,7 @@ export function startApp(root) {
 
   /* ── 描く ───────────────────────────────────────────── */
   function render() {
+    { const q = root.querySelector(".add-q"); if (q) q.innerHTML = S.scr === "app" ? qh("add", "margin:0 2px 0 -2px") : ""; }
     root.querySelectorAll("[data-scr]").forEach(b => b.classList.toggle("on", b.dataset.scr === S.scr));
     const addBtn = $("#addBtn"); if (addBtn) addBtn.hidden = S.scr !== "app";
     if (S.scr !== "app") {
