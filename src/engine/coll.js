@@ -7,6 +7,7 @@
  */
 import { qh } from "./guide.js";
 import * as D from "./data.js";
+import { ask } from "./ask.js";
 
 export const MAKES = ["X記事", "ポスト", "スレッド", "note", "セミナー資料", "販売ページ", "メルマガ", "動画の台本", "その他"];
 export const DEFAULT_COLL = () => ({
@@ -129,7 +130,7 @@ export function createColl(x) {
     const un = DATA[k].filter(o => !tableOf(k, o.table)).length;
     return `<nav class="nav ${x.S.navOn ? "" : "off"}" aria-label="${LABEL[k]}のメニュー"><div class="nav-list">${nv("all", "すべての" + LABEL[k], DATA[k].length)}
       ${un ? nv("unsorted", "未整理（置き場なし）", un, '<span class="nv-dot" style="--c:var(--k-lp)"></span>') : ""}
-      <div class="nh"><span>フォルダ</span><button id="cAddFolder" aria-label="フォルダを足す" title="フォルダを足す">＋</button></div>${tree(null, 0)}</div></nav>`;
+      <div class="nh"><span>フォルダ</span><button id="cAddFolder" aria-label="フォルダを追加" title="フォルダを追加">＋</button></div>${tree(null, 0)}</div></nav>`;
   }
 
   /* ── 一覧 ── */
@@ -172,8 +173,8 @@ export function createColl(x) {
       <dl class="eprops"><dt>作るもの</dt><dd><select class="plain" id="pkMake"><option value="" ${pk.make ? "" : "selected"}>選ぶ</option>${MAKES.map(m => `<option ${m === pk.make ? "selected" : ""}>${esc(m)}</option>`).join("")}</select></dd>
         <dt>置き場</dt><dd><select class="plain" id="cMove">${tableOpts("pack", pk.table)}</select></dd>
         <dt>目的</dt><dd><textarea class="plain-ta" id="pkGoal" rows="2" placeholder="何を、誰に向けて作るか">${esc(pk.goal)}</textarea></dd></dl>
-      <div class="sec-h"><span>見本 ${its.length} 件${gone ? `（消したスワイプ ${gone} 件は外して出す）` : ""}</span><button class="ghost" id="cPick">＋ 見本を足す</button></div>
-      <div class="rows">${its.map(it => rowItHTML(it, "pack")).join("") || '<div class="empty">まだ見本がありません。「＋ 見本を足す」から選ぶか、スワイプの表で選んで「素材パックに入れる」。</div>'}</div>
+      <div class="sec-h"><span>見本 ${its.length} 件${gone ? `（消したスワイプ ${gone} 件は外して出す）` : ""}</span><button class="ghost" id="cPick">＋ 見本を追加</button></div>
+      <div class="rows">${its.map(it => rowItHTML(it, "pack")).join("") || '<div class="empty">まだ見本がありません。「＋ 見本を追加」から選ぶか、スワイプの表で選んで「素材パックに入れる」。</div>'}</div>
       <div class="ed-foot">${delBtn("pack")}</div>
     </div>
     ${U.drawer ? `<div class="scrim" id="pkDrawerX"></div><aside class="detail" aria-label="渡す文"><div class="dt-top"><div class="dt-title">渡す文</div><button class="ghost" id="pkCopy2">コピー</button><button class="icon" id="pkDrawerX2" aria-label="閉じる">${IC.close}</button></div>
@@ -198,8 +199,8 @@ export function createColl(x) {
     const sh = one("share"), its = sh.items.map(i => ({ it: byId(i.id), c: i.c })).filter(v => v.it);
     const edit = `<dl class="eprops"><dt>置き場</dt><dd><select class="plain" id="cMove">${tableOpts("share", sh.table)}</select></dd>
         <dt>はじめに</dt><dd><textarea class="plain-ta" id="shIntro" rows="2" placeholder="ページの最初に出すシアニンのコメント">${esc(sh.intro)}</textarea></dd></dl>
-      <div class="sec-h"><span>スワイプ ${its.length} 件</span><button class="ghost" id="cPick">＋ 足す</button></div>
-      <div class="rows">${its.map(({ it, c }) => rowItHTML(it, "share", U.cedit === it.id || c ? `<textarea class="plain-ta cmt-in" data-shc="${it.id}" rows="1" placeholder="シアニンのコメント（空なら出さない）">${esc(c)}</textarea>` : `<button class="addcmt" data-cedit="${it.id}">＋ コメント</button>`)).join("") || '<div class="empty">まだ何も入っていません。「＋ 足す」から選ぶか、スワイプの表で選んで「共有ページに入れる」。</div>'}</div>
+      <div class="sec-h"><span>スワイプ ${its.length} 件</span><button class="ghost" id="cPick">＋ 追加</button></div>
+      <div class="rows">${its.map(({ it, c }) => rowItHTML(it, "share", U.cedit === it.id || c ? `<textarea class="plain-ta cmt-in" data-shc="${it.id}" rows="1" placeholder="シアニンのコメント（空なら出さない）">${esc(c)}</textarea>` : `<button class="addcmt" data-cedit="${it.id}">＋ コメント</button>`)).join("") || '<div class="empty">まだ何も入っていません。「＋ 追加」から選ぶか、スワイプの表で選んで「共有ページに入れる」。</div>'}</div>
       <div class="ed-foot">${delBtn("share")}</div>`;
     return `<div class="ed gut">${backHTML("share")}
       <div class="ed-head"><input class="ttl" id="shName" value="${esc(sh.name)}" aria-label="ページの題名">
@@ -223,16 +224,16 @@ export function createColl(x) {
       ${sh.cta ? `<div class="cta"><div class="cta-t">${esc(sh.ctaText)}</div>${sh.ctaUrl ? `<span class="cta-b">${esc(sh.ctaBtn || "くわしく見る")}</span>` : ""}</div>` : ""}</div>`;
   }
 
-  /* ── 探して足す窓 ── */
+  /* ── 探して追加の窓 ── */
   function pickHTML(k) {
     const o = one(k); if (!o) return "";
     const inIds = new Set(k === "pack" ? o.items : o.items.map(i => i.id));
     const q = U.mq.trim().toLowerCase();
     const hits = x.labelFilter(items().filter(it => !q || x.matchQ(it, q)), U.mf).slice(0, 300);
-    return `<div class="mscrim" id="cmScrim"></div><div class="modal" role="dialog" aria-label="スワイプを足す">
-      <div class="m-top"><label class="lq" style="margin:0;width:100%;height:40px">${IC.search}<input id="cmq" placeholder="探して足す（本文・分析・投稿者）" value="${esc(U.mq)}" aria-label="探す"></label><button class="icon" id="cmClose" aria-label="閉じる">${IC.x}</button></div>
+    return `<div class="mscrim" id="cmScrim"></div><div class="modal" role="dialog" aria-label="スワイプを追加">
+      <div class="m-top"><label class="lq" style="margin:0;width:100%;height:40px">${IC.search}<input id="cmq" placeholder="探して追加（本文・分析・投稿者）" value="${esc(U.mq)}" aria-label="探す"></label><button class="icon" id="cmClose" aria-label="閉じる">${IC.x}</button></div>
       <div class="frow m-f">${x.labelSels(U.mf, "mf")}</div>
-      <div class="m-list">${hits.map(it => `<button class="m-it ${inIds.has(it.id) ? "in" : ""}" data-madd="${it.id}">${x.gradeHTML(it, true) || '<span class="gchip">―</span>'}<span class="w"><span class="t">${esc(it.title)}</span><span class="s">${esc(x.pathOf(it.table).join(" / "))}${it.shu ? "・" + esc(it.shu) : ""}</span></span><span class="mk">${inIds.has(it.id) ? "入っている" : "＋ 足す"}</span></button>`).join("") || '<div class="empty">当てはまるものがありません</div>'}</div>
+      <div class="m-list">${hits.map(it => `<button class="m-it ${inIds.has(it.id) ? "in" : ""}" data-madd="${it.id}">${x.gradeHTML(it, true) || '<span class="gchip">―</span>'}<span class="w"><span class="t">${esc(it.title)}</span><span class="s">${esc(x.pathOf(it.table).join(" / "))}${it.shu ? "・" + esc(it.shu) : ""}</span></span><span class="mk">${inIds.has(it.id) ? "入っている" : "＋ 追加"}</span></button>`).join("") || '<div class="empty">当てはまるものがありません</div>'}</div>
       <div class="m-foot"><span class="lsub">${inIds.size} 件が入っている</span><button class="ink" id="cmClose2">閉じる</button></div></div>`;
   }
 
@@ -257,14 +258,15 @@ export function createColl(x) {
     if (q("#cBack")) { st.open = null; U.drawer = false; x.render(); return true; }
     if (q("#cNew")) { create(k).then(n => { if (n) { st.open = n.id; x.render(); } }); return true; }
     if (b = q("#cAddTable")) {
-      const name = prompt("表の名前"); if (!name || !name.trim()) return true;
-      const id = (k === "pack" ? "pt-" : "st-") + Date.now().toString(36); conf(k).tables.push({ id, name: name.trim(), folder: b.dataset.folder });
-      st.table = id; x.saveCfg(); x.render(); return true;
+      const folder = b.dataset.folder; // 2026-11-08 入力の窓をやめ、アプリの窓で聞く
+      ask({ title: "表の名前", value: "", ok: "追加" }).then(r => { const name = r?.value.trim(); if (!name) return;
+        const id = (k === "pack" ? "pt-" : "st-") + Date.now().toString(36); conf(k).tables.push({ id, name, folder });
+        st.table = id; x.saveCfg(); x.render(); }); return true;
     }
     if (q("#cAddFolder")) {
-      const name = prompt("フォルダの名前"); if (!name || !name.trim()) return true;
-      const id = (k === "pack" ? "pf-" : "sf-") + Date.now().toString(36); conf(k).folders.push({ id, name: name.trim(), parent: null });
-      st.loc = "f:" + id; x.saveCfg(); x.render(); return true;
+      ask({ title: "フォルダの名前", value: "", ok: "追加" }).then(r => { const name = r?.value.trim(); if (!name) return;
+        const id = (k === "pack" ? "pf-" : "sf-") + Date.now().toString(36); conf(k).folders.push({ id, name, parent: null });
+        st.loc = "f:" + id; x.saveCfg(); x.render(); }); return true;
     }
     if (b = q("[data-swopen]")) { x.openSwipe(b.dataset.swopen); return true; }
     if (q("#cPick")) { U.pick = true; U.mq = ""; U.mf = {}; x.render(); setTimeout(() => document.getElementById("cmq")?.focus(), 0); return true; }
@@ -322,11 +324,12 @@ export function createColl(x) {
     const b = t.closest("[data-ctable]"); if (!b) return false;
     const tb = tableOf(k, b.dataset.ctable); if (!tb) return true;
     const n = DATA[k].filter(o => o.table === tb.id).length;
-    const name = prompt(n ? "表の名前を変える" : "表の名前を変える（空にして決定すると、この空の表を消す）", tb.name);
-    if (name === null) return true;
-    if (!name.trim()) { if (n) { x.toast("中身がある表は消せません"); return true; } conf(k).tables = conf(k).tables.filter(v => v.id !== tb.id); CS[k].table = null; }
-    else tb.name = name.trim();
-    x.saveCfg(); x.render(); return true;
+    ask({ title: "表の名前を変更", value: tb.name, ok: "保存", danger: n ? null : { label: "この表を削除" } }).then(r => { if (!r) return;
+      if (r.danger) { conf(k).tables = conf(k).tables.filter(v => v.id !== tb.id); CS[k].table = null; x.toast(`表「${tb.name}」を削除しました`); }
+      else if (r.value.trim()) tb.name = r.value.trim();
+      else return;
+      x.saveCfg(); x.render(); });
+    return true;
   }
   function onEscape() {
     if (U.pick) { U.pick = null; return true; }

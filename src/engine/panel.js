@@ -167,7 +167,7 @@ export function startPanel(root) {
     const dup = D.findSame(S.items, P.url);
     const dupLine = dup ? `<div class="dup">保存済み（${esc(dup.saved)}・${esc(tableName(dup.table))}）<a class="ghost" href="/?open=${encodeURIComponent(dup.id)}" target="_blank" rel="noopener">開く</a></div>` : "";
     const wait = Y.state === "wait";
-    // 保存済みなのに文字起こしが無い（画面に URL を貼って足した回）→ その保存に入れる（2026-10-30）
+    // 保存済みなのに文字起こしが無い（画面に URL を貼って追加した回）→ その保存に入れる（2026-10-30）
     if (dup && D.needsTranscript(dup) && Y.state === "ok") {
       return `<div class="box"><div class="box-h">この動画は保存済み<span>文字起こし待ち</span></div>${dupLine}
       <div class="yt-st ok">${esc(st[1])}</div>
