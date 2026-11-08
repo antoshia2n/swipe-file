@@ -115,7 +115,8 @@ export function startPanel(root) {
     S.refsKey = key;
     const text = X ? (S.thread ? X.thread : [X.main]).map(p => p.text).join("\n") : [P.ogTitle || P.title, P.desc, S.yt?.data?.title, S.yt?.og?.title].filter(Boolean).join("\n");
     let host = ""; try { host = new URL(P.url).hostname.replace(/^www\./, ""); } catch { /* 住所が無いページ */ }
-    S.autoRefs = D.suggestLabels({ text, handle: X ? X.main.handle : "", host }, S.items, refList());
+    S.autoRefs = D.suggestLabels({ text, handle: X ? X.main.handle : "", host, thread: X && S.thread ? X.thread.length : 0 }, S.items, refList());
+    S.autoTried = true;
     S.refs = new Set(S.autoRefs);
   }
   const pickedRefs = () => { const ok = new Set(refList()); return [...S.refs].filter(x => ok.has(x)); };
@@ -135,7 +136,7 @@ export function startPanel(root) {
     const opts = `<option value="">自動：${esc(tableName(auto))}</option>${tables().map(t => `<option value="${t.id}" ${S.table === t.id ? "selected" : ""}>${esc(tableName(t.id))}</option>`).join("")}`;
     return `<div class="dest"><div>保存先</div><select class="lsel mini" id="pnTable" aria-label="保存先">${opts}</select></div>
       <div class="frow"><span class="dt-h" style="margin:0">評価</span><select class="grade g${S.grade}" id="pnGrade" aria-label="評価">${["", 5, 4, 3, 2, 1].map(v => `<option value="${v}" ${String(v) === String(S.grade || "") ? "selected" : ""}>${v ? GRADE[v] : "―"}</option>`).join("")}</select><span class="lsub">空でもよい</span></div>
-      <div><div class="dt-h">ラベル<span>AI に借りてほしいところ</span></div>${S.autoRefs.length ? `<div class="pn-auto">自動で選んだ：${S.autoRefs.map(esc).join("・")}（外すときは押す）</div>` : ""}<div class="pick">${refList().map(x => `<button class="pk ${S.refs.has(x) ? "on" : ""}" style="--c:var(--l-kata)" data-ref="${esc(x)}">${esc(x)}</button>`).join("")}<span class="pk-new"><input id="pnNewLabel" placeholder="新しいラベル" aria-label="新しいラベル"><button class="pk" id="pnAddLabel" title="ラベルを作って付ける">＋</button></span></div></div>
+      <div><div class="dt-h">ラベル<span>AI に借りてほしいところ</span></div>${S.autoRefs.length ? `<div class="pn-auto">自動で選んだ：${S.autoRefs.map(esc).join("・")}（外すときは押す）</div>` : S.autoTried ? `<div class="pn-auto">中身に合うラベルが見つからなかったので、何も選んでいません</div>` : ""}<div class="pick">${refList().map(x => `<button class="pk ${S.refs.has(x) ? "on" : ""}" style="--c:var(--l-kata)" data-ref="${esc(x)}">${esc(x)}</button>`).join("")}<span class="pk-new"><input id="pnNewLabel" placeholder="新しいラベル" aria-label="新しいラベル"><button class="pk" id="pnAddLabel" title="ラベルを作って付ける">＋</button></span></div></div>
       <div><div class="dt-h">メモ<span>空でもよい・分析の「言語化」に入る</span></div><textarea class="pn-in pn-memo" id="pnMemo" placeholder="- なぜ目に止まったか&#10;  - 気づいたこと">${esc(S.memo)}</textarea><div class="pn-hint">Enter で次の行も箇条書き・Tab で一段下げる</div></div>`;
   }
   function pageBox() {
@@ -298,7 +299,7 @@ export function startPanel(root) {
     if (b = q("[data-ws]")) { if (b.dataset.ws === "menu") { wsOpen = !wsOpen; renderWs(true); } else goWs(b.dataset.id || null); return; }
     if (wsOpen && !q("#wsm")) closeWs(false); // 場所のメニューは外を押すと閉じる
     if (b = q("[data-cap]")) { S.mode = b.dataset.cap; store.set("swipe.pn.mode", S.mode); render(); return; }
-    if (b = q("[data-thr]")) { S.thread = b.dataset.thr === "1"; render(); return; }
+    if (b = q("[data-thr]")) { S.thread = b.dataset.thr === "1"; autoPick(true); render(); return; }
     if (q("#pnAddLabel")) { addLabel(); return; }
     if (b = q("[data-ref]")) { const v = b.dataset.ref; S.refs.has(v) ? S.refs.delete(v) : S.refs.add(v); S.refsTouched = true; render(); return; }
     if (q("#pnSave")) { savePage(); return; }
