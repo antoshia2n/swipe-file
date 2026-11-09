@@ -1051,6 +1051,7 @@ export function startApp(root) {
   document.addEventListener("keydown", onKey);
 
   /* ── 読み込み ───────────────────────────────────────── */
+  let bootMsg = "", bootFocus = "";
   async function boot() {
     S.loading = true; S.err = ""; render();
     try {
@@ -1081,8 +1082,19 @@ export function startApp(root) {
       // パネルの「さっき保存したもの」から ?open=ID で開かれたら、その 1 件を開く
       const openId = new URLSearchParams(location.search).get("open");
       if (openId && ITEMS.some(x => x.id === openId)) { S.open = openId; history.replaceState(null, "", location.pathname); }
+      // 2026-11-09 オレtube の「スワイプくんへ ↗」から ?add=URL（&title=）で開かれたら、保存済みならその 1 件を、無ければリンクを入れた追加の窓を開く
+      const sp = new URLSearchParams(location.search), addUrl = (sp.get("add") || "").trim();
+      if (/^https?:\/\//i.test(addUrl)) {
+        history.replaceState(null, "", location.pathname);
+        const same = D.findSame(ITEMS, addUrl);
+        if (same) { S.open = same.id; bootMsg = "このリンクは保存済みです（" + same.saved + "）"; }
+        else { S.modal = "add"; S.add = { url: addUrl, title: (sp.get("title") || "").slice(0, 200), body: "", why: "", table: "", file: null, fileObj: null, busy: false }; bootFocus = "#adSave"; }
+      }
     } catch (e) { S.err = e.message || "読み込めませんでした"; }
     S.loading = false; render();
+    if (bootMsg) toast(bootMsg);
+    if (bootFocus) { const f = bootFocus; setTimeout(() => { const n = $(f); n && n.focus(); }, 0); }
+    bootMsg = ""; bootFocus = "";
     if (!S.err) fillNoteBodies();
   }
   // 2026-11-03：本文が空の note 記事（前に保存したもの）を、裏で 1 件ずつ埋める。本文の欄にだけ書き、空のときだけ書く
