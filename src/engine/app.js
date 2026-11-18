@@ -98,6 +98,7 @@ export function startApp(root) {
     loc: remembered.loc || "all", table: remembered.table || null, view: remembered.view || "v1",
     q: "", f: {}, sel: new Set(), open: null, navOn: innerWidth > 860,
     colPop: false, fPop: false, cellPop: null, fold: new Set(), lb: null, dragCol: null, modal: null, add: null, delArm: false, bodyEdit: false, saving: 0,
+    tsz: ["s", "m", "l"].includes(store.get("swipe.tsz", "m")) ? store.get("swipe.tsz", "m") : "m", // 一覧のサムネの大きさ（2026-11-19）
   };
 
   root.innerHTML = `<div id="app">
@@ -496,20 +497,29 @@ export function startApp(root) {
     return `<div class="card"><div class="tw"><table><thead><tr><th style="width:36px"></th><th>見出し${qh("row")}</th>${cols.map(k => `<th class="dragc" draggable="true" data-col="${k}">${esc(COLS[k])}</th>`).join("")}</tr></thead><tbody>
     ${a.map(it => `<tr class="${S.sel.has(it.id) ? "sel" : ""}">
       <td><input type="checkbox" class="ck" data-ck="${it.id}" ${S.sel.has(it.id) ? "checked" : ""} aria-label="選ぶ"></td>
-      <td><button class="namebtn ${it.shot ? "withi" : ""}" data-open="${it.id}">${it.shot ? `<img class="ti" src="${esc(it.shot)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}<span class="nmw"><span class="nm">${esc(it.title)}</span><span class="snip">${esc(it.a.why || it.excerpt || it.body.slice(0, 120))}</span></span></button></td>
+      <td><button class="namebtn withi" data-open="${it.id}">${coverHTML(it, "ti")}<span class="nmw"><span class="nm">${esc(it.title)}</span><span class="snip">${esc(it.a.why || it.excerpt || it.body.slice(0, 120))}</span></span></button></td>
       ${cols.map(k => `<td>${cellHTML(k, it)}</td>`).join("")}</tr>`).join("")}
     </tbody></table></div></div>`;
   }
+  /* ── 一覧の表紙（2026-11-19）：ポストの画像そのもの → 無ければスクショの上の部分 → 無ければ見出しを大きく出す文字の表紙 ── */
+  const srcName = it => (it.file && /\.pdf($|\?)/i.test(it.file.url)) ? "PDF" : D.ytId(it.url) ? "YouTube" : it.src || it.shu || "メモ";
+  // 文字の表紙を下に敷き、画像を上に重ねる（画像が読めなければ文字の表紙が見える）
+  function coverHTML(it, cls, badge) {
+    const u = it.cover || (it.coverNone ? "" : it.shot);
+    const fb = it.cover && !it.coverNone && it.shot && it.shot !== it.cover ? it.shot : "";
+    return `<span class="${cls}" style="--c:${KINDC[kindOf(it)]}" aria-hidden="true"><span class="tcv"><span class="tcv-k">${esc(srcName(it))}</span><span class="tcv-t">${esc(it.title)}</span></span>${u ? `<img src="${esc(u)}" ${fb ? `data-fb="${esc(fb)}"` : ""} alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}${badge ? `<span class="cv-src">${esc(srcName(it))}</span>` : ""}</span>`;
+  }
+  const numsHTML = it => { const m = it.m || {}, e = it.ex || {}; const v = m.view || e["表示"], l = m.like || e["いいね"] || e["スキ"]; return v || l ? `<span class="g-m">${v ? `表示 <b>${esc(v)}</b>` : ""}${v && l ? "・" : ""}${l ? `いいね <b>${esc(l)}</b>` : ""}</span>` : ""; };
   // 画像が無いものは、本文の書き出しと言語化を見せる文字のカード（同じ箱を並べない）
   function textCardHTML(it) {
     const k = kindOf(it), text = (it.body || it.excerpt || "").trim();
     const who = [it.author, it.handle].filter(Boolean).join("・");
     return `<div class="tcard" style="--c:${KINDC[k]}"><span class="tc-k">${esc(it.shu || "種類なし")}${who ? `・${esc(who)}` : ""}</span>${text ? `<p class="tc-b">${esc(text.slice(0, 220))}${text.length > 220 ? "…" : ""}</p>` : it.file ? `<p class="tc-f">${IC.file}${esc(it.file.name || "ファイル")}</p>` : ""}</div>`;
   }
-  const galHTML = it => `<button class="gcard" data-open="${it.id}">${it.shot ? shotHTML(it) : textCardHTML(it)}<div class="g-t">${esc(it.title)}</div>${it.a.why ? `<div class="g-why">${esc(it.a.why)}</div>` : ""}<div class="g-ft"><span class="chips">${gradeHTML(it, true)}${it.tags.slice(0, 2).map(x => `<span class="chip" style="--c:var(--faint)">${esc(x)}</span>`).join("")}</span>${stageHTML(it)}</div></button>`;
+  const galHTML = it => `<button class="gcard" data-open="${it.id}">${coverHTML(it, "cv", true)}<div class="g-t">${esc(it.title)}</div>${it.a.why ? `<div class="g-why">${esc(it.a.why)}</div>` : ""}${numsHTML(it)}<div class="g-ft"><span class="chips">${gradeHTML(it, true)}${it.tags.slice(0, 2).map(x => `<span class="chip" style="--c:var(--faint)">${esc(x)}</span>`).join("")}</span>${stageHTML(it)}</div></button>`;
   // スマホの一覧：表ではなく 1 件 1 枚のカードを縦に並べる
   const mrowHTML = it => `<div class="mrow ${S.sel.has(it.id) ? "sel" : ""}"><input type="checkbox" class="ck" data-ck="${it.id}" ${S.sel.has(it.id) ? "checked" : ""} aria-label="選ぶ">
-      <button class="mrow-b" data-open="${it.id}">${it.shot ? `<img class="mrow-i" src="${esc(it.shot)}" alt="" loading="lazy" referrerpolicy="no-referrer">` : ""}<span class="mrow-w"><span class="nm">${esc(it.title)}</span>${it.a.why || it.excerpt ? `<span class="snip">${esc(it.a.why || it.excerpt)}</span>` : ""}
+      <button class="mrow-b" data-open="${it.id}">${coverHTML(it, "mrow-i")}<span class="mrow-w"><span class="nm">${esc(it.title)}</span>${it.a.why || it.excerpt ? `<span class="snip">${esc(it.a.why || it.excerpt)}</span>` : ""}
         <span class="chips">${gradeHTML(it, true)}${it.shu ? `<span class="chip" style="--c:var(--k-doc)">${esc(it.shu)}</span>` : ""}${it.tags.slice(0, 2).map(x => `<span class="chip" style="--c:var(--faint)">${esc(x)}</span>`).join("")}${stageOf(it) ? "" : '<span class="stage none">未分析</span>'}</span>
         <span class="mrow-p">${esc(pathOf(it.table).join(" / "))}・${esc(it.saved)}</span></span></button></div>`;
   function boardHTML(a, group) {
@@ -542,16 +552,17 @@ export function startApp(root) {
     if (S.loading) content = `<div class="card empty">読み込んでいます…</div>`;
     else if (S.err) content = `<div class="card empty">${esc(S.err)}<br><button class="ghost" id="reload" style="margin-top:10px">もう一度読む</button></div>`;
     else if (!a.length) content = `<div class="card empty">${ITEMS.length ? "当てはまるものはありません。<br>絞り込みを外すか、別のビューを選んでください。" : "まだ 1 件もありません。右上の「＋ 追加」から入れてください。"}</div>`;
-    else if (v.type === "gal") content = `<div class="gal">${a.map(galHTML).join("")}</div>`;
+    else if (v.type === "gal") content = `<div class="gal tsz-${S.tsz}">${a.map(galHTML).join("")}</div>`;
     else if (v.type === "board") content = boardHTML(a, v.group);
-    else content = isPhone() ? `<div class="mlist">${a.map(mrowHTML).join("")}</div>` : tableHTML(a);
+    else content = isPhone() ? `<div class="mlist">${a.map(mrowHTML).join("")}</div>` : `<div class="tsz-${S.tsz}">${tableHTML(a)}</div>`;
+    const tszBtn = (v.type === "gal" || (v.type === "table" && !isPhone())) && a.length ? `<span class="tszw" role="group" aria-label="サムネの大きさ"><span class="lsub">サムネ</span>${[["s", "小"], ["m", "中"], ["l", "大"]].map(([k, n]) => `<button class="tszb ${S.tsz === k ? "on" : ""}" data-tsz="${k}" aria-pressed="${S.tsz === k}">${n}</button>`).join("")}</span>` : "";
     const colBtn = v.type === "table" ? `<span class="colbtn"><button class="ghost" id="colBtn" aria-expanded="${S.colPop}">列</button>${S.colPop ? colPopHTML() : ""}</span>` : "";
     const moveOpts = CFG.tables.map(t => `<option value="${t.id}">${esc(pathOf(t.id).join(" / "))}</option>`).join("");
     return `<div class="wrap gut">${headHTML(crumb, title, lead)}${tabs}
       <div class="vrow"><div class="vtabs" role="tablist" aria-label="ビュー">${CFG.views.map(vtab).join("")}<button class="vtab" id="addView">＋ ビュー</button>${qh("view", "align-self:center")}</div>
         <label class="lq">${IC.search}<input id="q" placeholder="本文・分析・投稿者で探す" value="${esc(S.q)}" aria-label="探す"></label></div>
       <div class="frow"><span class="fwrap"><button class="ghost fbtn ${nF ? "on" : ""}" id="fBtn" aria-expanded="${S.fPop}">${IC.filter}絞り込み${nF ? ` <b>${nF}</b>` : ""}</button>${qh("filter")}${S.fPop ? `<div class="fpop" role="dialog" aria-label="絞り込み">${labelSels(S.f, "f")}</div>` : ""}</span>
-        ${fChips}${anyF ? `<button class="fclear" id="fClear">外す</button>` : ""}<span class="lsub" style="margin-left:auto">${a.length} 件${f.star || f.todo ? `・ビュー「${esc(v.name)}」の条件つき` : ""}</span>${colBtn}</div>
+        ${fChips}${anyF ? `<button class="fclear" id="fClear">外す</button>` : ""}<span class="lsub" style="margin-left:auto">${a.length} 件${f.star || f.todo ? `・ビュー「${esc(v.name)}」の条件つき` : ""}</span>${tszBtn}${colBtn}</div>
       ${S.sel.size ? `<div class="bulk"><span>${S.sel.size} 件を選択中</span><select id="bulkMove" aria-label="移す先"><option value="">表へ移す…</option>${moveOpts}</select>
         <select id="bulkSet" aria-label="まとめて付ける"><option value="">まとめて付ける…</option>
           <option value="ai:1">Claude に分析を頼む</option>
@@ -870,6 +881,7 @@ export function startApp(root) {
     if (b = q("[data-loc]")) { S.loc = b.dataset.loc; S.sel.clear(); S.open = null; S.f = {}; if (S.loc.startsWith("f:") || S.loc === "all") S.view = CFG.views[0].id; if (innerWidth <= 860) S.navOn = false; render(); return; }
     if (b = q("[data-table]")) { if (S.table === b.dataset.table) return; S.table = b.dataset.table; S.sel.clear(); render(); return; }
     if (b = q("[data-view]")) { S.view = b.dataset.view; render(); return; }
+    if (b = q("[data-tsz]")) { S.tsz = b.dataset.tsz; store.set("swipe.tsz", S.tsz); hidePv(); render(); return; }
     if (q("#reload")) { boot(); return; }
     if (q("#addView")) {
       const f = { ...S.f }; const parts = [f.shu, f.ref, f.star && (GRADE[f.star] + (f.star < 5 ? " 以上" : "")), f.genre, f.stagex !== undefined && f.stagex !== "" && STAGES[f.stagex], f.tag].filter(Boolean);
@@ -1095,8 +1107,44 @@ export function startApp(root) {
     if (bootMsg) toast(bootMsg);
     if (bootFocus) { const f = bootFocus; setTimeout(() => { const n = $(f); n && n.focus(); }, 0); }
     bootMsg = ""; bootFocus = "";
-    if (!S.err) fillNoteBodies();
+    if (!S.err) fillNoteBodies().then(fillCovers);
   }
+  // 2026-11-19：表紙の無いもの（前に保存したもの・道具から足したもの）に、裏で 1 件ずつ表紙を付ける。取れなければスクショのまま
+  async function fillCovers() {
+    const todo = ITEMS.filter(D.needsCover).slice(0, 80);
+    let n = 0, k = 0;
+    for (const it of todo) {
+      const r = await D.fetchCover(it.url);
+      if (!r) continue; // 道が切れているときは印を付けず、次に開いたときにまた探す
+      try { await D.saveCover(it, r.fetched ? r : {}); if (r.image) n++; } catch { /* 次に開いたときにまた試す */ }
+      if (r.image && ++k % 10 === 0) render();
+    }
+    if (n) { render(); toast(`${n} 件に表紙を付けました`); }
+  }
+  // 表紙の画像が読めないとき：スクショがあればそちらへ、無ければ画像を外して下の文字の表紙を見せる
+  const onImgErr = e => {
+    const im = e.target;
+    if (!(im instanceof HTMLImageElement) || !im.closest(".cv,.ti,.mrow-i")) return;
+    if (im.dataset.fb) { const u = im.dataset.fb; delete im.dataset.fb; im.src = u; } else im.remove();
+  };
+  document.addEventListener("error", onImgErr, true);
+  // 表のサムネにマウスを乗せると大きく出す（マウスの画面だけ・ほかの部品は動かさない）
+  const pv = document.createElement("div"); pv.className = "tpv"; pv.hidden = true; document.body.appendChild(pv);
+  const hidePv = () => { pv.hidden = true; pv.dataset.id = ""; };
+  const onOver = e => {
+    if (!matchMedia("(pointer:fine)").matches) return;
+    const t = e.target.closest?.(".namebtn .ti");
+    if (!t || !root.contains(t)) { if (!pv.hidden) hidePv(); return; }
+    const id = t.closest("[data-open]")?.dataset.open, it = ITEMS.find(x => x.id === id);
+    if (!it) return;
+    if (pv.dataset.id !== id) { pv.innerHTML = coverHTML(it, "cv", true); pv.dataset.id = id; }
+    const r = t.getBoundingClientRect(), h = 270;
+    pv.style.left = Math.min(r.right + 12, innerWidth - 352) + "px";
+    pv.style.top = Math.max(8, Math.min(r.top, innerHeight - h - 8)) + "px";
+    pv.hidden = false;
+  };
+  document.addEventListener("mouseover", onOver);
+  document.addEventListener("scroll", hidePv, true);
   // 2026-11-03：本文が空の note 記事（前に保存したもの）を、裏で 1 件ずつ埋める。本文の欄にだけ書き、空のときだけ書く
   async function fillNoteBodies() {
     const todo = ITEMS.filter(D.needsNoteBody).slice(0, 40);
@@ -1109,5 +1157,5 @@ export function startApp(root) {
     if (n) { render(); toast(`note 記事 ${n} 件に本文を入れました`); }
   }
   boot();
-  return () => { document.removeEventListener("paste", onPaste); document.removeEventListener("keydown", onKey); removeEventListener("message", onYtMsg); ytHold.remove(); };
+  return () => { document.removeEventListener("error", onImgErr, true); document.removeEventListener("mouseover", onOver); document.removeEventListener("scroll", hidePv, true); pv.remove(); document.removeEventListener("paste", onPaste); document.removeEventListener("keydown", onKey); removeEventListener("message", onYtMsg); ytHold.remove(); };
 }

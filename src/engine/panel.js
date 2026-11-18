@@ -266,9 +266,11 @@ export function startPanel(root) {
         const ex = { "投稿日": m.time ? D.shortDate(m.time) : "", "いいね": m.like, "RT": m.rt, "表示": m.view };
         const props = { handle: "@" + m.handle, m: { like: m.like, rt: m.rt, view: m.view }, ex };
         if (posts.length > 1) props.thread = posts.map(p => p.text);
-        f = { url: `https://x.com/${m.handle}/status/${m.id}`, body: posts.map(p => p.text).filter(Boolean).join("\n\n"), author: m.name, props, shu: "ポスト" };
+        // 2026-11-19 一覧の表紙：ポストに付いている画像の 1 枚目（無ければ一覧を開いたときに裏で探す）
+        const img = (m.imgs || []).find(u => /^https:\/\/pbs\.twimg\.com\/media\//.test(u));
+        f = { url: `https://x.com/${m.handle}/status/${m.id}`, body: posts.map(p => p.text).filter(Boolean).join("\n\n"), author: m.name, props, shu: "ポスト", cover: img ? img.replace(/\?.*$/, "") + "?name=small" : "" };
       } else {
-        f = { url: P.url, ogp: { title: P.ogTitle || P.title, description: P.desc } };
+        f = { url: P.url, ogp: { title: P.ogTitle || P.title, description: P.desc, image: P.image || "" } };
       }
       const table = S.table || autoTable({ isX: !!X, url: P.url });
       const it = await D.createItem({ ...f, why: cleanBullets(S.memo), table, grade: S.grade, refs: pickedRefs(), file: { kind: "img", url: shotUrl, name: "shot.png" } });
