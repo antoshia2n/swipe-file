@@ -192,6 +192,9 @@ export function toItem(r) {
     // YouTube で画像が無い行（パネルの前に保存したもの）は、動画のサムネを出す
     shot: p.shot || r.screenshot_url || p.ogImage || (ytId(r.source_url) ? ytThumb(ytId(r.source_url)) : ""),
     shotIsOg: !p.shot && !r.screenshot_url && (!!p.ogImage || !!ytId(r.source_url)),
+    // 2026-11-19 一覧の表紙：ポストの画像そのもの（X）・見出し画像（note など）・動画のサムネ。無ければ一覧はスクショの上の部分
+    cover: p.cover || p.ogImage || (ytId(r.source_url) ? ytThumb(ytId(r.source_url)) : ""),
+    coverNone: p.coverNone === true,
     file: r.file_url ? { url: r.file_url, name: p.file_name || fileNameOf(r.file_url), pages: p.pages || "" } : null,
     shu: r.shu || "",
     // 2026-10-30：参考ポイントはラベルに統一した（AI に指示するときの言葉をラベル 1 つにする）。前の参考ポイントはラベルとして読む
@@ -298,6 +301,33 @@ export async function fetchNoteBody(url) {
   } catch { return ""; }
 }
 
+/* ── 一覧の表紙（2026-11-19） ─────────────────────────── */
+/** 表紙を探しに行く対象か。表紙が無く、まだ探していない、リンクのあるもの（YouTube はサムネが決まっているので除く） */
+export const needsCover = it => !!it?.url && !it.props?.cover && !it.props?.ogImage && !it.props?.coverTried && !ytId(it.url);
+
+/** /api/cover に表紙の住所を聞く。{ image, none } か null */
+export async function fetchCover(url) {
+  try {
+    const user = auth.currentUser;
+    if (!user) return null;
+    const token = await user.getIdToken();
+    const res = await fetch("/api/cover", { method: "POST", headers: { Authorization: `Bearer ${token}`, "Content-Type": "application/json" }, body: JSON.stringify({ url }) });
+    if (!res.ok) return null;
+    return await res.json();
+  } catch { return null; }
+}
+
+/** 表紙を props に書く（ほかの欄には触らない）。取れなかったものも「探した」印を付け、毎回探しに行かない */
+export async function saveCover(it, r) {
+  const props = { ...(it.props || {}), coverTried: true };
+  if (r?.image) props.cover = r.image;
+  if (r?.none) props.coverNone = true;
+  await run(supabase.from(TABLE).update({ props }).eq("id", it.id).select("id"), "表紙を保存できませんでした");
+  it.props = props;
+  if (r?.image) it.cover = r.image;
+  if (r?.none) it.coverNone = true;
+}
+
 /** 本文が空の note 記事か（本文を埋める対象） */
 export const needsNoteBody = it => it?.src === "note" && !(it.body || "").trim() && detectSourceType(it.url) === "note";
 
@@ -345,6 +375,7 @@ export async function createItem(f) {
   if (f.file?.kind === "img") props.shot = f.file.url;
   if (isPdf) props.file_name = f.file.name;
   if (og?.image) props.ogImage = og.image;
+  if (f.cover) props.cover = f.cover;
   const row = {
     source_url: url || null,
     title: t.title,

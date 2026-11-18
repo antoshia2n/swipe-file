@@ -587,9 +587,36 @@ tr:hover .grade.g0,.grade.g0:focus{color:var(--faint);border-color:var(--line);b
 .fchip{display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:600;height:28px;padding:0 6px 0 10px;border-radius:99px;background:var(--accent-bg);color:var(--accent-ink);border:1px solid var(--accent-line)}
 .fchip svg{opacity:.7}
 .fchip:hover svg{opacity:1}
-/* ギャラリー：高さをそろえず詰めて並べる */
-.gal{display:block;columns:4 240px;column-gap:12px}
-.gal .gcard{break-inside:avoid;width:100%;margin-bottom:12px}
+/* ギャラリー：表紙の大きさをそろえて並べる（2026-11-19。前は高さばらばらの詰め並べ） */
+.gal{display:grid;grid-template-columns:repeat(auto-fill,minmax(var(--gmin,220px),1fr));gap:12px;align-items:stretch}
+.gal .gcard{width:100%;margin:0}
+.gal .g-ft{margin-top:auto}
+.tsz-s{--gmin:160px;--ti:40px}.tsz-m{--gmin:220px;--ti:64px}.tsz-l{--gmin:300px;--ti:96px}
+.tsz-s .g-why,.tsz-s .g-ft .chip{display:none}
+/* 表紙：文字の表紙を下に敷き、画像を上に重ねる */
+.cv,.ti,.mrow-i{position:relative;display:block;overflow:hidden;background:var(--soft);border:1px solid var(--line);flex:none}
+.cv{aspect-ratio:4/3;border-radius:8px;width:100%}
+.cv img,.ti img,.mrow-i img{position:absolute;inset:0;width:100%;height:100%;object-fit:cover;object-position:top;display:block}
+.tcv{position:absolute;inset:0;display:flex;flex-direction:column;justify-content:center;gap:6px;padding:9%;background:linear-gradient(160deg,var(--panel),color-mix(in srgb,var(--c) 10%,var(--soft)));border-top:3px solid var(--c)}
+.tcv-k{font-size:12px;font-weight:700;color:var(--muted)}
+.tcv-t{font-weight:800;font-size:17px;line-height:1.4;color:var(--fg);display:-webkit-box;-webkit-line-clamp:4;-webkit-box-orient:vertical;overflow:hidden}
+.tsz-s .tcv-t{font-size:13px;-webkit-line-clamp:3}.tsz-l .tcv-t{font-size:21px;-webkit-line-clamp:5}
+.cv-src{position:absolute;left:8px;bottom:8px;font-size:12px;font-weight:700;background:rgba(26,26,26,.74);color:#fff;border-radius:6px;padding:0 7px;line-height:20px}
+.g-m{font-size:12px;color:var(--muted);font-variant-numeric:tabular-nums}
+.g-m b{color:var(--fg);font-weight:600}
+/* 表とスマホの一覧の小さな表紙：文字の表紙は種類だけを出す */
+.ti .tcv,.mrow-i .tcv{padding:4px;align-items:center;border-top-width:2px}
+.ti .tcv-t,.mrow-i .tcv-t{display:none}
+.mrow-i{width:56px;height:56px;border-radius:8px}
+/* 表のサムネに乗せると出る大きな表紙 */
+.tpv{position:fixed;z-index:60;width:340px;background:var(--panel);border:1px solid var(--line);border-radius:12px;box-shadow:var(--shadow);padding:8px;pointer-events:none}
+.tpv[hidden]{display:none}
+.tpv .tcv-t{font-size:20px;-webkit-line-clamp:5}
+/* サムネの大きさの切り替え */
+.tszw{display:inline-flex;align-items:center;gap:2px;margin-left:10px}
+.tszw .lsub{margin-right:4px}
+.tszb{font-size:12px;font-weight:600;min-width:28px;height:28px;padding:0 8px;border-radius:8px;border:1px solid var(--line);background:var(--panel);color:var(--fg)}
+.tszb.on{background:#b45309;border-color:#b45309;color:#fff}
 .tcard{border-left:3px solid var(--c);background:color-mix(in srgb,var(--c) 6%,var(--panel));border-radius:0 8px 8px 0;padding:10px 12px;display:flex;flex-direction:column;gap:6px}
 .tc-k{font-size:12px;font-weight:700;color:var(--muted)}
 .tc-b{margin:0;font-size:13px;line-height:1.75;color:var(--fg);white-space:pre-wrap;display:-webkit-box;-webkit-line-clamp:7;-webkit-box-orient:vertical;overflow:hidden}
@@ -624,7 +651,7 @@ tr:hover .grade.g0,.grade.g0:focus{color:var(--faint);border-color:var(--line);b
 .tundo{color:var(--accent);font-weight:800;font-size:13px;padding:2px 4px;border-radius:6px}
 .tundo:hover{text-decoration:underline}
 .namebtn.withi{display:flex;flex-direction:row;gap:10px;align-items:center}
-.namebtn .ti{width:36px;height:36px;border-radius:6px;object-fit:cover;object-position:top;border:1px solid var(--line);flex:none;background:var(--soft)}
+.namebtn .ti{width:var(--ti,64px);height:var(--ti,64px);border-radius:6px;border:1px solid var(--line);flex:none;background:var(--soft)}
 .namebtn .nmw{display:flex;flex-direction:column;min-width:0}
 .dup{display:flex;align-items:center;gap:8px;flex-wrap:wrap;font-size:12.5px;font-weight:600;color:var(--accent-ink);background:var(--accent-bg);border:1px solid var(--accent-line);border-radius:8px;padding:6px 10px}
 .dup .ghost{padding:3px 9px}
