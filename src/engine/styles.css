@@ -780,3 +780,4 @@ tr:hover .grade.g0,.grade.g0:focus{color:var(--faint);border-color:var(--line);b
 @media (pointer:fine){.wsit{min-height:36px}.pn-app .wsbtn{min-height:28px}}
 .pn-app .wsbtn{max-width:170px}
 .pn-app .wslist{position:absolute;left:0;right:auto;top:calc(100% + 6px);max-width:calc(100vw - 24px)}
+.cv:has(.cv-src) .tcv-k{display:none}
